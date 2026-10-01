@@ -1,0 +1,237 @@
+# Advanced and compatibility reference
+
+Read this only for a task explicitly routed here by the main skill. This preserves
+existing lower-level capabilities; it is not the default new-application path.
+Check the installed declarations and the deployment's operation support before
+using an older route. Never fall back from refused request-bound authorization to
+JWT/admin authorization. Retry advice here applies only when the operation is known
+safe to repeat; it never authorizes blindly repeating transaction submissions,
+native approval POSTs or signing requests with an uncertain outcome.
+
+# `tasra-sdk/chain`
+
+Everything on-chain, behind its own subpath so the crypto core stays free of
+`viem` imports. The SDK installs viem automatically; declare it in your own
+application dependencies only when your code imports viem directly.
+
+## Public deployment manifest
+
+A manifest is the record of a deployment — every contract, its address, its runtime
+code hash and its proxy implementation. Configuring from one means no address is ever
+copied by hand, and nothing loads that does not match its pin.
+
+Canonical source: [t3-foundry/tasra-releases](https://github.com/t3-foundry/tasra-releases).
+Fuji's [current pointer](https://github.com/t3-foundry/tasra-releases/blob/main/networks/testnet/current.json)
+names `deployments/tasra-fuji-v1.json` and supplies `sha256`. Resolve that path
+relative to `networks/testnet/`, not the repository root. Network records are
+versioned by repository commit, independently of CLI binary release assets.
+
+For an application, choose a reviewed commit from that repository and set
+`TASRA_RELEASES_REF` to its full 40-character SHA. Fetch both files at that revision,
+check HTTP status, and pass the original text to the parser; reserializing JSON
+changes its digest. A trusted local checkout of the same revision works too.
+The pointer's checksum protects the record only when you trust its source; hashing
+an arbitrary download yourself does not establish authenticity.
+
+Complete Node bootstrap (`npm install tasra-sdk@latest`):
+
+```ts
+import {
+  parsePinnedNetworkManifest, addressBookFromManifest, createTasraChainClient,
+  observeNetworkManifest, NETWORKS,
+} from 'tasra-sdk/chain'
+
+const revision = process.env.TASRA_RELEASES_REF
+if (!revision || !/^[a-f0-9]{40}$/.test(revision)) throw new Error('Set TASRA_RELEASES_REF to a reviewed release-repository commit')
+const base = `https://raw.githubusercontent.com/t3-foundry/tasra-releases/${revision}/networks/testnet/`
+async function readText(url: string) {
+  const response = await fetch(url, {signal: AbortSignal.timeout(15_000)})
+  if (!response.ok) throw new Error(`Release download failed: HTTP ${response.status}`)
+  return response.text()
+}
+const pointer = JSON.parse(await readText(`${base}current.json`))
+if (pointer.schemaVersion !== 1 || pointer.network !== 'testnet' ||
+    pointer.chainId !== 43113 || pointer.status !== 'active' ||
+    typeof pointer.manifest !== 'string' || !/^deployments\/[a-z0-9.-]+\.json$/.test(pointer.manifest)) {
+  throw new Error('Expected an active Fuji deployment pointer')
+}
+const manifest = parsePinnedNetworkManifest(await readText(`${base}${pointer.manifest}`), pointer.sha256)
+if (manifest.chainId !== pointer.chainId || manifest.network !== pointer.network || manifest.status !== pointer.status) {
+  throw new Error('Pointer/manifest mismatch')
+}
+const addresses = addressBookFromManifest(manifest)
+const rpcUrl = process.env.KK_RPC_URL ?? NETWORKS[manifest.network].rpcUrl
+const chain = createTasraChainClient({rpcUrl, addresses, chainId: manifest.chainId})
+const verifierAgentUrl = manifest.services.find(s => s.kind === 'verifier-agent')?.url
+const observation = await observeNetworkManifest(manifest, rpcUrl)
+if (!observation.matches) throw new Error('Deployment code does not match the pinned manifest')
+```
+
+To use a previously downloaded record with the SDK's live examples, set
+`KK_MANIFEST_FILE`, `KK_MANIFEST_SHA256` (the pointer's trusted digest), and
+`KK_RPC_URL`. The equivalent local-file setup is:
+
+```ts
+import {readFileSync} from 'node:fs'
+import {parsePinnedNetworkManifest, addressBookFromManifest, createTasraChainClient, observeNetworkManifest} from 'tasra-sdk/chain'
+
+const manifest  = parsePinnedNetworkManifest(readFileSync(path, 'utf8'), expectedSha256)
+const addresses = addressBookFromManifest(manifest)
+const chain     = createTasraChainClient({rpcUrl, addresses, chainId: manifest.chainId})
+const obs       = await observeNetworkManifest(manifest, rpcUrl)   // {matches, contracts[], blockNumber}
+```
+
+Obtain the JSON and its SHA-256 from a verified release, never from a moving explorer
+response, and never invent addresses from a network name. The digest is the whole
+point: a file that does not hash to it throws
+`Network manifest SHA-256 mismatch` before any network call.
+
+- **Only `status: "active"` configures a live client.** Planned and retired records are
+  for display; `addressBookFromManifest` will not give you a usable book from one.
+- `observeNetworkManifest` compares finalized runtime code and proxy implementations
+  with the record. It certifies **code identity only** — not service readiness,
+  governance wiring or audit quality.
+- **Read published endpoints from `services[]`.** Fuji's record includes
+  `verifier-agent`, `relayer`, and `explorer` entries. The RPC comes from
+  `NETWORKS[manifest.network].rpcUrl` or an explicit override; discover keepers
+  and verifiers on-chain. Other records may have no services: report the missing
+  endpoint rather than inventing one. Service URLs do not themselves establish a
+  ServiceRegistry approval (see `tasra-create-slot/references/advanced.md`, "Gas: who pays").
+  Keys and tokens are never in the manifest. Missing contract entries must be
+  supplied by a reviewed release record before the corresponding operation is used.
+- Regenerate it whenever the deployment changes: the addresses move and the old digest
+  stops verifying, which is the behaviour you want.
+
+The public package ships `dist/chain/manifest.d.ts` and the other declarations;
+no private source checkout is needed.
+
+## Address book and read client
+
+```ts
+import {createTasraChainClient, addressBookFromManifest, addressBookFromObject, requireAddress, NETWORKS} from 'tasra-sdk/chain'
+
+// manifest is downloaded from tasra-releases and verified against its trusted checksum.
+const addresses = addressBookFromManifest(manifest)
+const chainId = manifest.chainId
+const chain = createTasraChainClient({rpcUrl, addresses, chainId, logWindow: 1_000})   // at or under the RPC's getLogs cap
+```
+
+Slot ids everywhere in this subpath are the bytes32 id as a `0x…` hex string
+(viem `Hex`), never a number or bigint.
+
+`requireAddress(book, 'KeyRegistry')` throws with the known keys when one is
+missing. `NETWORKS` holds RPC and chain presets. Use the downloaded manifest's
+chain ID explicitly; the constructor does not query the RPC to confirm it.
+Keep `logWindow` within the selected RPC's `getLogs` limit.
+Construction is offline — it only configures viem; the first read is the first
+RPC call, and a missing address throws there rather than at construction.
+
+## Reading
+
+```ts
+const slot  = await chain.readers.keyRegistry.getKeySlot(slotId)
+const nodes = await chain.readers.keyRegistry.assignedNodes(slotId)
+const ops   = await chain.readers.nodeRegistry.activeOperators()
+const bal   = await chain.readers.settlement.balanceOf(slotId)
+const keeps = await chain.readers.nodeRegistry.hasTag(ops[0], keccak256(toHex('keykeeper')))  // role tag
+const policy = await chain.readers.keyRegistry.verifierPolicy(slotId)   // [committee, quorum]; 0 = unset
+const cr    = await chain.readers.keyRegistry.requiresCommitReveal()    // which createSlot call the registry takes
+```
+
+Reader namespaces: `nodeRegistry`, `keyRegistry`, `settlement`, `token`,
+`bondingCurve`, `treasury`, `vault`, `beacon`, `verifierSet`. They live under
+`chain.readers.*` — `chain.keyRegistry` does not exist.
+
+`activeOperators()` is the whole fleet; a slot's committee is drawn only from the
+operators carrying its tag, so the pool a new slot can use is
+`activeOperators().filter(hasTag)` — count it before choosing `n`
+(`tasra-create-slot`):
+
+```ts
+const tag = keccak256(toHex('keykeeper'))                    // createSlot's default tag
+const eligible = []
+for (const op of await chain.readers.nodeRegistry.activeOperators())
+  if (await chain.readers.nodeRegistry.hasTag(op, tag)) eligible.push(op)
+```
+`chain.read(contract, fn, args)` and `chain.readMany(...)` cover the rest;
+concurrent reads are batched through Multicall3. `chain.client` is the
+underlying viem `PublicClient` and `chain.addresses` the resolved book.
+
+Events: `chain.getLogsWindowed({fromBlock, toBlock, contracts?, onWindow?})`
+walks a range in windows and returns `DecodedEvent[]` — `{category, contract,
+address, eventName, args, blockNumber, blockHash, txHash, txIndex, logIndex}`;
+`contracts` takes PascalCase book names; block numbers are viem `bigint`s, and
+`onWindow(toBlock, events)` fires per window. The range is inclusive at both
+ends, so for the last N blocks take `const head = await chain.getBlockNumber()`,
+then `fromBlock = head >= N - 1n ? head - (N - 1n) : 0n` and `toBlock = head` —
+a young chain has fewer blocks than you asked for. `decodeContractLogs`,
+`categoryFor`, `eventNamesOf` and `jsonSafe` support explorer-style tooling:
+`jsonSafe(value)` is not a stringifier, it returns a copy with every `bigint`
+turned into a string, so hand its result to `JSON.stringify`.
+`chain.getBlockTimestamps(blockNumbers)` batches timestamps.
+
+## Discovery
+
+```ts
+import {resolveSlotKeeperUrls, resolveVerifierDirectory, resolveSlotGroupKey, VERIFIER_TAG} from 'tasra-sdk/chain'
+
+const keeperUrls = await resolveSlotKeeperUrls(chain, slotId)   // assignedNodes → NodeRegistry.nodeOf(op).url
+const verifiers  = await resolveVerifierDirectory(chain)         // CommitteeVerifier[] {index, url, operator?, pubkey?}, by ascending address
+const {publicKey, epoch, mode} = await resolveSlotGroupKey(chain, slotId)   // mode: number, 0 = frost, 1 = bls; epoch: number
+```
+
+`VERIFIER_TAG` is `keccak256("verifier")`, the `NodeRegistry` role tag
+`resolveVerifierDirectory` selects on. Address-book entries these need:
+`resolveSlotKeeperUrls` reads `KeyRegistry` + `NodeRegistry`,
+`resolveVerifierDirectory` only `NodeRegistry`, `resolveSlotGroupKey` only
+`KeyRegistry`; `createTasraSlotClient` uses the first two. The committee path
+also reads `ThresholdRandomBeacon` and `VerifierSetRegistry` (`tasra-committee-path`).
+
+Network-service HTTP readers (`import {nodeApi, verifierApi, parsePrometheus} from 'tasra-sdk/chain'`)
+are plain objects of functions taking the base URL:
+`nodeApi.info(nodeUrl)` (`version`, `peer_id`, `node_identifier` — the node's BLS
+identifier — and feature gates such as `admin_scope_enabled`; fields are
+snake_case as the node returns them, and every one of them is optional in
+`NodeInfo`, so narrow before using a value), `nodeApi.keys(nodeUrl)`, `nodeApi.metering(nodeUrl, id)`,
+`verifierApi.info(verifierUrl)`, and `parsePrometheus(text)` for metrics.
+These take the URL you pass; `rewriteUrl` belongs to the slot client and does not
+reach them, so apply the same mapping yourself to a discovered URL first.
+
+## The slot-driven client
+
+```ts
+import {createTasraSlotClient} from 'tasra-sdk/chain'
+
+const kk = createTasraSlotClient({
+  chain,
+  identity: 'did:example:alice',   // this holder's DID (KK_IDENTITY in the other skills)
+  rewriteUrl: u => u.replace('tasra-node-', 'nodes.example.com/node-'),  // in-cluster → reachable,
+                                   // applied to both the keeper URLs and the chosen verifier
+  onResolve: r => console.log(r.verifier, r.nodes),
+})
+const s = await kk.openSession(slotId, {renewalToken})   // same Session API as createTasraClient
+await s.close()                                           // kk.closeAll() closes every session
+```
+
+It reads the slot's keepers from chain and chooses the verifier from the
+on-chain verifier set; that verifier mints the JWT. The `Session` and the auth
+modes are described in the compatibility reference for
+`tasra-credentials-and-sessions`. `identity` is optional for `{jwt}` and
+`{renewalToken}` — the token already names the holder — and required for
+`{redemptionToken}` and `{vpJwt}`, which throw without it.
+
+## Common mistakes
+
+- Forgetting to declare viem when your own app imports it directly. The SDK
+  installs viem for its own adapters; SDK-only consumers need no separate declaration.
+- Assuming on-chain node URLs are reachable from your network. They are
+  often in-cluster names; use `rewriteUrl` for the slot client, and the same
+  mapping by hand for `nodeApi`/`verifierApi` calls.
+- Huge `getLogs` ranges on a public RPC. Set `logWindow` under the cap.
+- Serialising reader results with `JSON.stringify`. Values are `bigint`;
+  use `JSON.stringify(jsonSafe(value))`.
+- Passing `number` block ranges to `getLogsWindowed`. Use `bigint`.
+
+## Where to read more
+
+- `node_modules/tasra-sdk/dist/chain/index.d.ts` and the files it re-exports.

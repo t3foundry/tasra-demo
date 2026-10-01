@@ -1,0 +1,19 @@
+{
+  "name": "tasra-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  },
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "tasra-sdk": "^0.2.4"
+  }
+}
