@@ -53,9 +53,16 @@ export async function readKey(id: Hex) {
 export function liveBackend(config: ServiceConfig): SigningBackend {
   assertSameNetwork(config.network)
   const creator = tasra.wallets.create({ privateKey: config.creatorKey })
+  const name = (manifest: Manifest, slotId: Hex) =>
+    manifest.signers.find(
+      (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
+    )?.name
   const verify = async (manifest: Manifest, proof: Proof) => {
-    const expected = manifest.signers.find((s) => s.name === proof.name)
-    if (!expected || expected.slotId !== proof.slotId)
+    if (
+      !manifest.signers.some(
+        (s) => s.slotId.toLowerCase() === proof.slotId.toLowerCase(),
+      )
+    )
       throw new Error('Unassigned signer')
     const key = await readKey(proof.slotId)
     if (
@@ -71,14 +78,14 @@ export function liveBackend(config: ServiceConfig): SigningBackend {
       throw new Error('Signature verification failed')
   }
   return {
-    async open(manifest, person) {
+    async open(manifest, slotId) {
       const session = await openVerifierAgentSession({
         chainId: deployment.chainId,
         keyRegistry: deployment.addresses.KeyRegistry!,
-        slotId: config.slots[person],
+        slotId,
         action: 'sign',
         message: statement(manifest),
-        description: `${person}: sign ${manifest.title}, version ${manifest.version}`,
+        description: `${name(manifest, slotId) ?? slotId}: sign ${manifest.title}, version ${manifest.version}`,
         verifierAgentUrl,
         signer: creator.signer,
       })
@@ -91,7 +98,7 @@ export function liveBackend(config: ServiceConfig): SigningBackend {
         requestHash: toHex(session.requestHash),
       }
     },
-    async sign(manifest, person, saved, beforeSubmit) {
+    async sign(manifest, slotId, saved, beforeSubmit) {
       let grant
       try {
         grant = await awaitVerifierAgentResult(restoreSession(saved), {
@@ -108,7 +115,6 @@ export function liveBackend(config: ServiceConfig): SigningBackend {
       }
       if (!grant.verifierProofs?.length)
         throw new Error('Missing verifier membership proofs')
-      const slotId = config.slots[person]
       const handle = await tasra.slots.frost(slotId)
       beforeSubmit()
       const signed = await handle.sign(statement(manifest), {
@@ -120,7 +126,7 @@ export function liveBackend(config: ServiceConfig): SigningBackend {
         }),
       })
       return {
-        name: person,
+        name: name(manifest, slotId),
         slotId,
         publicKey: toHex(signed.groupPublicKey),
         epoch: signed.epoch,

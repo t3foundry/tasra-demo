@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, base64 } from '../api'
-import { digest, people, type PublicRequest } from '../../../shared/model'
+import { digest, type PublicRequest } from '../../../shared/model'
 import { useNotice } from '../notice'
-import { useSender } from '../sender'
-import { Badge, Recipients, Timeline, Downloads, name } from '../components'
+import { Badge, Recipients, Timeline, Downloads, name, shortSlot } from '../components'
+
+type KeySlotOption = { slotId: string; name?: string }
 
 export function Dashboard() {
   const notice = useNotice()
-  const sender = useSender()
   const [list, setList] = useState<PublicRequest[]>([])
   const [selected, setSelected] = useState<PublicRequest>()
   const [title, setTitle] = useState('Consulting agreement')
@@ -15,10 +15,13 @@ export function Dashboard() {
   const [chosen, setChosen] = useState('')
   const [bytes, setBytes] = useState<Uint8Array>()
   const [busy, setBusy] = useState(false)
+  const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([])
+  const [slotFilter, setSlotFilter] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const l = await api<PublicRequest[]>('/requests', undefined, true)
+    const l = await api<PublicRequest[]>('/requests')
     setList(l)
     setSelected((prev) => {
       if (!prev) return prev
@@ -27,8 +30,28 @@ export function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (sender) void load().catch((e) => notice(e.message))
-  }, [sender, load, notice])
+    void load().catch((e) => notice(e.message))
+  }, [load, notice])
+
+  useEffect(() => {
+    void api<KeySlotOption[]>('/key-slots')
+      .then(setAllSlots)
+      .catch((e) => notice(e.message))
+  }, [notice])
+
+  function toggle(slotId: string) {
+    setSelectedSlots((prev) =>
+      prev.includes(slotId)
+        ? prev.filter((s) => s !== slotId)
+        : [...prev, slotId],
+    )
+  }
+
+  const visibleSlots = slotFilter
+    ? allSlots.filter((s) =>
+        s.slotId.toLowerCase().includes(slotFilter.toLowerCase()),
+      )
+    : allSlots
 
   async function send() {
     setBusy(true)
@@ -38,10 +61,12 @@ export function Dashboard() {
           ? new Uint8Array(await fileRef.current.files[0].arrayBuffer())
           : undefined)
       if (!upload) throw new Error('Choose a PDF first')
+      if (!selectedSlots.length) throw new Error('Select at least one signer')
       const fingerprint = JSON.stringify({
         hash: await digest(upload),
         title,
         version,
+        signers: [...selectedSlots].sort(),
       })
       const pending = JSON.parse(
         sessionStorage.getItem('pending-request') ?? 'null',
@@ -52,11 +77,17 @@ export function Dashboard() {
         'pending-request',
         JSON.stringify({ fingerprint, id }),
       )
-      const created = await api<PublicRequest>(
-        '/requests',
-        { id, title, version: Number(version), pdfBase64: base64(upload) },
-        true,
-      )
+      const signers = selectedSlots.map((slotId) => {
+        const slot = allSlots.find((s) => s.slotId === slotId)
+        return { slotId, ...(slot?.name ? { name: slot.name } : {}) }
+      })
+      const created = await api<PublicRequest>('/requests', {
+        id,
+        title,
+        version: Number(version),
+        pdfBase64: base64(upload),
+        signers,
+      })
       sessionStorage.removeItem('pending-request')
       setSelected(created)
       notice('Request created. Share each signer’s invitation.')
@@ -68,18 +99,6 @@ export function Dashboard() {
     }
   }
 
-  if (!sender) {
-    return (
-      <>
-        <h1>Your signing workspace</h1>
-        <p>
-          Open the private sender-console link printed by <code>npm run serve</code>, or
-          open your Alice or Bob invitation.
-        </p>
-      </>
-    )
-  }
-
   return (
     <>
       <div className="topline">
@@ -87,8 +106,8 @@ export function Dashboard() {
           <div className="eyebrow">Documents</div>
           <h1>From draft to signed.</h1>
           <p className="sub">
-            Upload a PDF. Invite Alice, then Bob. Keep a verifiable record of their
-            approval.
+            Upload a PDF. Choose any signers from the registry, then keep a verifiable
+            record of their approval.
           </p>
         </div>
       </div>
@@ -142,8 +161,42 @@ export function Dashboard() {
               </button>
             </div>
             <p className="hint">{chosen}</p>
+            <div className="field">
+              <label htmlFor="slot-filter">Signers</label>
+              <input
+                id="slot-filter"
+                type="text"
+                placeholder="Filter by key-slot ID…"
+                value={slotFilter}
+                onChange={(e) => setSlotFilter(e.target.value)}
+              />
+              {allSlots.length ? (
+                <div className="signer-list">
+                  {visibleSlots.map((slot) => (
+                    <label className="consent" key={slot.slotId}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSlots.includes(slot.slotId)}
+                        onChange={() => toggle(slot.slotId)}
+                      />
+                      <span>
+                        {slot.name ? name(slot.name) : shortSlot(slot.slotId)}
+                        {slot.name ? (
+                          <small className="muted"> {shortSlot(slot.slotId)}</small>
+                        ) : null}
+                      </span>
+                    </label>
+                  ))}
+                  {visibleSlots.length === 0 ? (
+                    <p className="hint">No key slots match that ID.</p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="hint">Loading key slots from the registry…</p>
+              )}
+            </div>
             <p className="hint">
-              Both Alice and Bob must sign. Sending freezes the PDF, version and recipients.
+              Sending freezes the PDF, version and the selected signers.
             </p>
             <button className="primary" disabled={busy} onClick={send}>
               Create signing request
@@ -161,10 +214,7 @@ export function Dashboard() {
                       Version {r.manifest.version} · {r.manifest.requestId.slice(0, 8)}
                     </small>
                   </div>
-                  <button
-                    className="small"
-                    onClick={() => setSelected(r)}
-                  >
+                  <button className="small" onClick={() => setSelected(r)}>
                     {r.status.replaceAll('_', ' ')}
                   </button>
                 </div>
@@ -182,40 +232,39 @@ export function Dashboard() {
                 <h2>{selected.manifest.title}</h2>
                 <Badge status={selected.status} />
                 <Recipients r={selected} />
-                {people.map((p) => (
-                  <div key={p}>
-                    <h3>{name(p)}’s invitation</h3>
-                    <div className="linkbox">
+                {selected.manifest.signers.map((s) => (
+                  <div key={s.slotId}>
+                    <h3>
                       <a
-                        href={`/sign/${selected.manifest.requestId}/${p}`}
+                        href={`/sign/${selected.manifest.requestId}/${s.slotId}`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        {location.origin}/sign/{selected.manifest.requestId}/{p}
+                        {s.name ? name(s.name) : shortSlot(s.slotId)}’s invitation ↗
                       </a>
-                    </div>
+                    </h3>
                     <button
                       className="small"
                       onClick={async () => {
                         await navigator.clipboard.writeText(
-                          `${location.origin}/sign/${selected.manifest.requestId}/${p}`,
+                          `${location.origin}/sign/${selected.manifest.requestId}/${s.slotId}`,
                         )
                         notice('Invitation copied')
                       }}
                     >
-                      Copy {name(p)}’s link
+                      Copy {s.name ? name(s.name) : 'signer'}’s link
                     </button>
                     <div className="divider"></div>
                   </div>
                 ))}
                 <Downloads r={selected} />
-                {['awaiting_alice', 'awaiting_bob'].includes(selected.status) ? (
+                {selected.status === 'awaiting' ? (
                   <>
                     <div className="divider"></div>
                     <button
                       className="small"
                       onClick={async () => {
-                        await api(`/requests/${selected.manifest.requestId}/cancel`, {}, true)
+                        await api(`/requests/${selected.manifest.requestId}/cancel`, {})
                         await load()
                       }}
                     >

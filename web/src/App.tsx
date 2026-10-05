@@ -3,6 +3,7 @@ import { NoticeProvider } from './notice'
 import { SenderProvider } from './sender'
 import { Dashboard } from './pages/Dashboard'
 import { SignerPage } from './pages/SignerPage'
+import { SignersPage } from './pages/SignersPage'
 import { VerifyPage } from './pages/VerifyPage'
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
             </a>
             <nav aria-label="Main">
               <Link to="/">Documents</Link>
+              <Link to="/signers">Signers</Link>
               <Link to="/verify">Verify</Link>
             </nav>
           </div>
@@ -24,12 +26,13 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/signers" element={<SignersPage />} />
             <Route path="/verify" element={<VerifyPage />} />
-            <Route path="/sign/:id/:person" element={<SignerPage />} />
+            <Route path="/sign/:id/:slot" element={<SignerPage />} />
           </Routes>
         </main>
         <footer>
-          Built with Tasra SDK · Two people. Two independently verified signatures.
+          Built with Tasra SDK · Any number of independently verified signatures.
         </footer>
         </NoticeProvider>
       </SenderProvider>

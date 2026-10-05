@@ -4,8 +4,11 @@ export type Hex = `0x${string}`
 export const toHex = (bytes: Uint8Array): Hex =>
   `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
 
+// The two seeded tutorial signers; the signing model itself is dynamic.
 export const people = ['alice', 'bob'] as const
 export type Person = (typeof people)[number]
+
+export type SignerRef = { slotId: Hex; name?: string }
 
 export type Manifest = {
   schema: 'tasra-sign/v1'
@@ -15,12 +18,12 @@ export type Manifest = {
   documentSha256: string
   chainId: number
   keyRegistry: Hex
-  signers: Array<{ name: Person; slotId: Hex }>
+  signers: SignerRef[]
 }
 
 export type Proof = {
-  name: Person
   slotId: Hex
+  name?: string
   publicKey: Hex
   epoch: number
   r: Hex
@@ -39,20 +42,21 @@ export type Phase =
   | 'refused'
   | 'uncertain'
 
-export type History = { at: string; event: string; person?: Person }
+export type History = { at: string; event: string; person?: string }
+
+export type SignerState = {
+  slotId: Hex
+  name?: string
+  phase: Phase
+  attemptId?: string
+  signature?: Proof
+  error?: string
+}
 
 export type PublicRequest = {
   manifest: Manifest
-  status:
-    | 'awaiting_alice'
-    | 'awaiting_bob'
-    | 'completed'
-    | 'cancelled'
-    | 'declined'
-  signers: Record<
-    Person,
-    { phase: Phase; attemptId?: string; signature?: Proof; error?: string }
-  >
+  status: 'awaiting' | 'completed' | 'cancelled' | 'declined'
+  signers: SignerState[]
   history: History[]
 }
 
@@ -67,7 +71,10 @@ export function statement(manifest: Manifest): Uint8Array {
       documentSha256: manifest.documentSha256,
       chainId: manifest.chainId,
       keyRegistry: manifest.keyRegistry,
-      signers: manifest.signers.map(({ name, slotId }) => ({ name, slotId })),
+      signers: manifest.signers.map((s) => ({
+        name: s.name ?? null,
+        slotId: s.slotId,
+      })),
     }),
   )
 }
@@ -95,12 +102,14 @@ export function validateManifest(m: Manifest) {
     !Number.isSafeInteger(m.chainId) ||
     m.chainId <= 0 ||
     !/^0x[0-9a-f]{40}$/i.test(m.keyRegistry) ||
-    m.signers.length !== 2 ||
-    new Set(m.signers.map((s) => s.slotId.toLowerCase())).size !== 2 ||
-    !people.every(
-      (name, i) =>
-        m.signers[i]?.name === name &&
-        /^0x[0-9a-f]{64}$/i.test(m.signers[i]!.slotId),
+    !Array.isArray(m.signers) ||
+    m.signers.length < 1 ||
+    new Set(m.signers.map((s) => s.slotId.toLowerCase())).size !==
+      m.signers.length ||
+    m.signers.some(
+      (s) =>
+        !/^0x[0-9a-f]{64}$/i.test(s.slotId) ||
+        (s.name !== undefined && !s.name.trim()),
     )
   )
     throw new Error('Invalid document manifest')
@@ -123,13 +132,12 @@ export async function verifyBundle(
     (await digest(pdf)) !== expected.documentSha256 ||
     new TextDecoder().decode(statement(expected)) !==
       new TextDecoder().decode(statement(bundle.manifest)) ||
-    bundle.signatures.length !== 2 ||
-    new Set(bundle.signatures.map((s) => s.name)).size !== 2
+    bundle.signatures.length !== expected.signers.length
   )
     throw new Error('Document or request differs')
   for (const signer of expected.signers) {
     const proof = bundle.signatures.find(
-      (s) => s.name === signer.name && s.slotId === signer.slotId,
+      (s) => s.slotId.toLowerCase() === signer.slotId.toLowerCase(),
     )
     if (!proof) throw new Error('Missing assigned signer')
     const key = await readKey(signer.slotId)

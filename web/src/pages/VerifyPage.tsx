@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { api, base64 } from '../api'
 
-type SlotLink = { name: string; slotId: string }
+type SlotLink = { name?: string; slotId: string }
 
 const explorer = (slotId: string) =>
   `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
@@ -101,7 +101,7 @@ export function VerifyPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {cap(s.name)}
+                  {s.name ? cap(s.name) : s.slotId.slice(0, 12) + '…'}
                 </a>
               </span>
             ))}

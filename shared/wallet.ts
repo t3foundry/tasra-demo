@@ -14,7 +14,7 @@ import {
   verifyCredential,
   type TasraIdentity,
 } from 'tasra-sdk/app'
-import { digest, statement, toHex, type Manifest, type Person } from './model'
+import { digest, statement, toHex, type Manifest, type Hex } from './model'
 
 export type DemoWallet = {
   name: string
@@ -31,7 +31,7 @@ export function importWallet(text: string): DemoWallet {
   }
   if (
     value.schema !== 'tasra-demo-wallet/v1' ||
-    !['alice', 'bob', 'mallory'].includes(value.name) ||
+    !/^[a-z0-9][a-z0-9-]{0,31}$/.test(value.name) ||
     !/^0x[0-9a-f]{64}$/i.test(value.seed) ||
     typeof value.credential !== 'string'
   )
@@ -57,17 +57,22 @@ export type PublicSession = {
   operation: Record<string, unknown>
   bindingPreimage: Record<string, unknown>
   status: string
+  error?: string
+  qrPayload?: string
+  qrDataUrl?: string
 }
 
 export async function present(
   wallet: DemoWallet,
   manifest: Manifest,
-  person: Person,
+  slotId: Hex,
   session: PublicSession,
   verifierUrl: string,
   transport: typeof fetch,
 ) {
-  const expected = manifest.signers.find((s) => s.name === person)!
+  const expected = manifest.signers.find(
+    (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
+  )!
   const message = statement(manifest)
   const hash = requestHash(
     manifest.chainId,
@@ -145,7 +150,7 @@ export async function present(
 export function declineProof(
   wallet: DemoWallet,
   manifest: Manifest,
-  person: Person,
+  slotId: Hex,
 ) {
   return signCompactJws(
     { alg: 'EdDSA', typ: 'tasra-decline+jwt' },
@@ -153,7 +158,7 @@ export function declineProof(
       aud: 'tasra-sign-decline/v1',
       requestId: manifest.requestId,
       documentSha256: manifest.documentSha256,
-      person,
+      slotId,
       exp: Math.floor(Date.now() / 1000) + 120,
     },
     wallet.identity.issuer.signer,

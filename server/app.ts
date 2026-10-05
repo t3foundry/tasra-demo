@@ -1,15 +1,34 @@
 import { Hono, type Context } from 'hono'
-import { timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual, randomUUID } from 'node:crypto'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import QRCode from 'qrcode'
 import { pollOid4vpSession } from 'tasra-sdk/verifier-agent'
-import { verifyCompactJws } from 'tasra-sdk/oid4vp'
+import { verifyCompactJws, jwkFromDid, parseSdJwt, sdJwtClaims, type Jwk } from 'tasra-sdk/oid4vp'
 import { loadService, liveBackend, readKey } from './backend'
-import { deployment, verifierAgentUrl } from './config'
+import { deployment, verifierAgentUrl, tasra } from './config'
 import { createZip, readZip } from './zip'
-import { Store } from './store'
-import { Workflow, publicView, Conflict, type RequestRecord } from './workflow'
-import { people, verifyBundle, type Person, type Manifest, type Bundle } from '../shared/model'
+import { Store, stateDirectory } from './store'
+import { Workflow, publicView, Conflict, migrateRecords, type RequestRecord } from './workflow'
+import {
+  createOffer,
+  issuerMetadata,
+  authorizationServerMetadata,
+  exchangeToken,
+  issueNonce,
+  verifyProofJwt,
+  issueForHolder,
+} from './vci'
+import {
+  listSigners,
+  listKeySlots,
+  hasSigner,
+  addSigner,
+  issueSignerCredential,
+  issueRemoteSignerCredential,
+  createSignerSlot,
+} from './signers'
+import { verifyBundle, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
 
 export type AppContext = { Variables: NonNullable<unknown> }
 
@@ -48,8 +67,8 @@ export function createApp() {
   const workflow = new Workflow(store, liveBackend(config), {
     chainId: deployment.chainId,
     keyRegistry: deployment.addresses.KeyRegistry!,
-    slots: config.slots,
   })
+  migrateRecords(store)
   workflow.recover()
 
   const app = new Hono()
@@ -70,6 +89,19 @@ export function createApp() {
       throw new Conflict('Open the private sender-console link printed by the server')
   }
 
+  const publicJson = JSON.parse(
+    readFileSync(join(stateDirectory, 'public.json'), 'utf8'),
+  ) as { issuerDid?: string }
+
+  const holderKeys = new Map<string, Jwk>()
+  for (const person of Object.keys(config.slots) as Person[]) {
+    const slotId = config.slots[person]
+    const jwk = config.holderKeys[person]
+    if (slotId && jwk) holderKeys.set(slotId.toLowerCase(), jwk)
+  }
+  for (const s of listSigners())
+    if (s.holderKey) holderKeys.set(s.slotId.toLowerCase(), s.holderKey)
+
   app.get('/api/config', (c) =>
     c.json({
       chainId: deployment.chainId,
@@ -79,20 +111,257 @@ export function createApp() {
     }),
   )
 
-  app.get('/api/requests', (c) => {
-    isOwner(c)
-    return c.json(store.list().map(publicView).reverse())
+  app.get('/api/signers', (c) =>
+    c.json(
+      listSigners().map((s) => ({
+        name: s.name,
+        slotId: s.slotId,
+        dcql: publicJson.issuerDid
+          ? JSON.parse(
+              tasra.credentials.policy({
+                issuer: publicJson.issuerDid,
+                type: 'DocumentSigner',
+                subjects: ['did:demo:' + s.name],
+                claims: { role: ['document-signer'] },
+              }),
+            )
+          : undefined,
+      })),
+    ),
+  )
+
+  app.get('/api/key-slots', async (c) => c.json(await listKeySlots()))
+
+  type SignerJob = {
+    id: string
+    name: string
+    status: 'running' | 'completed' | 'failed'
+    progress: string[]
+    result?: { name: string; slotId: Hex; credential: string }
+    error?: string
+  }
+  const signerJobs = new Map<string, SignerJob>()
+
+  app.post('/api/signers', async (c) => {
+    const b = await readBody(c)
+    const name = text(b.name).trim().toLowerCase()
+    const holderDid = text(b.holderDid)
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name))
+      throw new Conflict('Signer name must be lowercase letters, digits and dashes')
+    if (!/^did:jwk:[A-Za-z0-9_-]+$/.test(holderDid))
+      throw new Conflict('Holder DID must be a did:jwk identifier')
+    if (hasSigner(name))
+      throw new Conflict('A signer named "' + name + '" already exists')
+    if ([...signerJobs.values()].some((j) => j.status === 'running'))
+      throw new Conflict('A signer creation is already in progress')
+
+    const job: SignerJob = { id: randomUUID(), name, status: 'running', progress: [] }
+    signerJobs.set(job.id, job)
+    void (async () => {
+      try {
+        job.progress.push('Issuing the signer credential…')
+        const credential = issueSignerCredential(name, holderDid)
+        job.progress.push('Credential issued')
+        job.progress.push('Creating the key slot…')
+        const slotId = await createSignerSlot(name, (message) =>
+          job.progress.push(message),
+        )
+        job.progress.push('Persisting the signer…')
+        addSigner({ name, slotId, holderKey: jwkFromDid(holderDid) })
+        job.status = 'completed'
+        job.result = { name, slotId, credential }
+      } catch (e) {
+        job.status = 'failed'
+        job.error = (e as Error).message
+      }
+    })()
+    return c.json({ jobId: job.id }, 202)
   })
 
-  app.post('/api/requests', async (c) => {
-    isOwner(c)
+  app.get('/api/signers/jobs/:id', (c) => {
+    const job = signerJobs.get(c.req.param('id'))
+    if (!job) throw new Conflict('Unknown signer creation job')
+    return c.json(job)
+  })
+
+  type RemoteSignerJob = {
+    id: string
+    name: string
+    status: 'running' | 'completed' | 'failed'
+    progress: string[]
+    result?: { name: string; slotId: Hex; credential: string; holderDid: string }
+    error?: string
+  }
+  const remoteSignerJobs = new Map<string, RemoteSignerJob>()
+
+  app.post('/api/signers/remote', async (c) => {
     const b = await readBody(c)
+    const name = text(b.name).trim().toLowerCase()
+    const holderDid = text(b.holderDid)
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name))
+      throw new Conflict('Signer name must be lowercase letters, digits and dashes')
+    if (!/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/.test(holderDid))
+      throw new Conflict('Holder DID must be an Ed25519 did:key identifier')
+    if (hasSigner(name))
+      throw new Conflict('A signer named "' + name + '" already exists')
+    if ([...signerJobs.values(), ...remoteSignerJobs.values()].some((j) => j.status === 'running'))
+      throw new Conflict('A signer creation is already in progress')
+
+    const job: RemoteSignerJob = {
+      id: randomUUID(),
+      name,
+      status: 'running',
+      progress: [],
+    }
+    remoteSignerJobs.set(job.id, job)
+    void (async () => {
+      try {
+        job.progress.push('Issuing the credential for the remote wallet…')
+        const { credential, holderKey } = issueRemoteSignerCredential(name, holderDid)
+        job.progress.push('Credential issued')
+        job.progress.push('Creating the key slot…')
+        const slotId = await createSignerSlot(name, (message) =>
+          job.progress.push(message),
+        )
+        job.progress.push('Persisting the signer…')
+        addSigner({ name, slotId, holderKey })
+        job.status = 'completed'
+        job.result = { name, slotId, credential, holderDid }
+      } catch (e) {
+        job.status = 'failed'
+        job.error = (e as Error).message
+      }
+    })()
+    return c.json({ jobId: job.id }, 202)
+  })
+
+  app.get('/api/signers/remote-jobs/:id', (c) => {
+    const job = remoteSignerJobs.get(c.req.param('id'))
+    if (!job) throw new Conflict('Unknown remote signer creation job')
+    return c.json(job)
+  })
+
+  // OpenID4VCI issuer: a remote wallet scans the QR and receives a DocumentSigner SD-JWT.
+  const vciOrigin = (c: Context) => new URL(c.req.url).origin
+
+  // The wallet is a browser PWA on a different origin (e.g. the Tasra Vault). Reflect the
+  // request origin so it may fetch this local issuer cross-origin and complete redemption.
+  const corsHeaders = (c: Context) => {
+    const origin = c.req.header('origin')
+    return {
+      'Access-Control-Allow-Origin': origin ?? '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Max-Age': '600',
+    }
+  }
+  const vci = (c: Context) => {
+    const headers = corsHeaders(c)
+    c.header('Access-Control-Allow-Origin', headers['Access-Control-Allow-Origin'])
+    c.header('Access-Control-Allow-Methods', headers['Access-Control-Allow-Methods'])
+    c.header('Access-Control-Allow-Headers', headers['Access-Control-Allow-Headers'])
+    c.header('Access-Control-Max-Age', headers['Access-Control-Max-Age'])
+  }
+  app.options('/*', (c) => {
+    vci(c)
+    return c.body(null, 204)
+  })
+
+  app.post('/api/signers/:name/issue-vc', async (c) => {
+    const name = c.req.param('name')
+    if (!listSigners().some((s) => s.name === name))
+      throw new Conflict('Unknown signer')
+    const offerUri = createOffer(name, vciOrigin(c))
+    const dataUrl = await QRCode.toDataURL(offerUri)
+    return c.json({ offerUri, qrDataUrl: dataUrl })
+  })
+
+  app.get('/.well-known/openid-credential-issuer', (c) => {
+    vci(c)
+    return c.json(issuerMetadata(vciOrigin(c)))
+  })
+
+  app.get('/.well-known/oauth-authorization-server', (c) => {
+    vci(c)
+    return c.json(authorizationServerMetadata(vciOrigin(c) + '/token'))
+  })
+
+  app.get('/.well-known/openid-configuration', (c) => {
+    vci(c)
+    return c.json(authorizationServerMetadata(vciOrigin(c) + '/token'))
+  })
+
+  app.post('/token', async (c) => {
+    vci(c)
+    try {
+      const body = await c.req.parseBody()
+      const code = String(body['pre-authorized_code'] ?? '')
+      if (!code) return c.json({ error: 'invalid_request', error_description: 'Missing pre-authorized code' }, 400)
+      const { access_token, c_nonce } = exchangeToken(code)
+      return c.json({
+        access_token,
+        token_type: 'bearer',
+        expires_in: 600,
+        c_nonce,
+        c_nonce_expires_in: 600,
+      })
+    } catch (e) {
+      return c.json({ error: 'invalid_grant', error_description: (e as Error).message }, 400)
+    }
+  })
+
+  app.post('/nonce', async (c) => {
+    vci(c)
+    const auth = c.req.header('authorization') ?? ''
+    const token = auth.replace(/^Bearer /, '')
+    const c_nonce = issueNonce(token)
+    return c.json({ c_nonce })
+  })
+
+  app.post('/credential', async (c) => {
+    vci(c)
+    try {
+      const auth = c.req.header('authorization') ?? ''
+      const token = auth.replace(/^Bearer /, '')
+      const b = (await c.req.json().catch(() => ({}))) as {
+        credential_configuration_id?: string
+        proofs?: { jwt?: string[] }
+      }
+      if (b.credential_configuration_id !== 'DocumentSigner')
+        return c.json({ error: 'unsupported_credential_type', error_description: 'Unsupported credential configuration' }, 400)
+      const proof = b.proofs?.jwt?.[0]
+      if (!proof)
+        return c.json({ error: 'invalid_request', error_description: 'Missing holder proof' }, 400)
+      const { holderDid, signerName } = verifyProofJwt(token, proof, vciOrigin(c))
+      const credential = issueForHolder(signerName, holderDid)
+      console.log(
+        `[vci] issued DocumentSigner VC for signer=${signerName} holder=${holderDid}`,
+      )
+      console.log('[vci] compact:', credential)
+      console.log('[vci] claims:', JSON.stringify(sdJwtClaims(parseSdJwt(credential)), null, 2))
+      return c.json({
+        credentials: [{ credential }],
+        notification_id: randomUUID(),
+      })
+    } catch (e) {
+      return c.json({ error: 'invalid_proof', error_description: (e as Error).message }, 400)
+    }
+  })
+
+  app.get('/api/requests', (c) =>
+    c.json(store.list().map(publicView).reverse()),
+  )
+
+  app.post('/api/requests', async (c) => {
+    const b = await readBody(c)
+    const signers = (Array.isArray(b.signers) ? b.signers : []) as SignerRef[]
     return c.json(
       await workflow.create({
         id: text(b.id),
         title: text(b.title),
         version: Number(b.version),
         pdf: Buffer.from(text(b.pdfBase64), 'base64'),
+        signers,
       }),
       201,
     )
@@ -170,7 +439,7 @@ export function createApp() {
       throw new Conflict('Both signatures are required')
     const bundle = {
       manifest: record.manifest,
-      signatures: people.map((p) => record.signers[p].signature!),
+      signatures: record.signers.map((s) => s.signature!),
     }
     await verifyBundle(
       Buffer.from(record.pdfBase64, 'base64'),
@@ -191,7 +460,7 @@ export function createApp() {
     const pdf = Buffer.from(record.pdfBase64, 'base64')
     const bundle = {
       manifest: record.manifest,
-      signatures: people.map((p) => record.signers[p].signature!),
+      signatures: record.signers.map((s) => s.signature!),
     }
     await verifyBundle(pdf, record.manifest, bundle, readKey)
     const zip = createZip([
@@ -205,50 +474,55 @@ export function createApp() {
     })
   })
 
-  app.post('/api/requests/:id/cancel', async (c) => {
-    isOwner(c)
-    return c.json(await workflow.close(c.req.param('id'), 'cancelled'))
-  })
+  app.post('/api/requests/:id/cancel', async (c) =>
+    c.json(await workflow.close(c.req.param('id'), 'cancelled')),
+  )
 
-  app.post('/api/requests/:id/:person/:verb', async (c) => {
+  app.post('/api/requests/:id/:slot/:verb', async (c) => {
     const id = c.req.param('id')
-    const person = c.req.param('person') as Person
+    const slotId = c.req.param('slot') as Hex
     const verb = c.req.param('verb')
-    if (!people.includes(person)) throw new Conflict('Unknown signer')
     const record = store.get(id)
+    const signer = record.signers.find(
+      (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
+    )
+    if (!signer) throw new Conflict('Unknown signer')
     const b = await readBody(c)
 
     if (verb === 'prepare')
-      return c.json(await workflow.prepare(id, person, text(b.documentSha256)))
+      return c.json(await workflow.prepare(id, slotId, text(b.documentSha256)))
     if (verb === 'decline') {
-      const { header, payload } = verifyCompactJws(
-        text(b.proof),
-        config.holderKeys[person],
-      )
+      const jwk = holderKeys.get(slotId.toLowerCase())
+      if (!jwk) throw new Conflict('This signer cannot decline from the demo wallet')
+      const { header, payload } = verifyCompactJws(text(b.proof), jwk)
       if (
         header.typ !== 'tasra-decline+jwt' ||
         payload.aud !== 'tasra-sign-decline/v1' ||
         payload.requestId !== id ||
         payload.documentSha256 !== record.manifest.documentSha256 ||
-        payload.person !== person ||
+        typeof payload.slotId !== 'string' ||
+        payload.slotId.toLowerCase() !== slotId.toLowerCase() ||
         typeof payload.exp !== 'number' ||
         !Number.isSafeInteger(payload.exp) ||
         payload.exp < Date.now() / 1000 ||
         payload.exp > Date.now() / 1000 + 180
       )
         throw new Conflict('Invalid decline authorization')
-      return c.json(await workflow.close(id, 'declined', person))
+      return c.json(await workflow.close(id, 'declined', slotId))
     }
+
+    if (verb === 'reset')
+      return c.json(await workflow.reset(id, slotId))
 
     const attemptId = text(b.attemptId)
     if (verb === 'complete')
-      return c.json(await workflow.complete(id, person, attemptId))
+      return c.json(await workflow.complete(id, slotId, attemptId))
 
-    const saved = record.sessions[person]
+    const saved = record.sessions[slotId.toLowerCase()]
     if (
-      record.signers[person].attemptId !== attemptId ||
+      signer.attemptId !== attemptId ||
       !saved ||
-      record.signers[person].phase !== 'awaiting_wallet'
+      signer.phase !== 'awaiting_wallet'
     )
       throw new Conflict('Wallet session is no longer active')
 
@@ -262,10 +536,12 @@ export function createApp() {
         sessionId: saved.sessionId,
         requestUri: saved.requestUri,
         qrPayload: saved.qrPayload,
+        qrDataUrl: await QRCode.toDataURL(saved.qrPayload),
         operation: saved.operation,
         requestHash: saved.requestHash,
         bindingPreimage: status.bindingPreimage,
         status: status.status,
+        error: status.error,
       })
     }
 

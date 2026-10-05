@@ -1,5 +1,4 @@
-import type { PublicRequest } from '../../shared/model'
-import { people } from '../../shared/model'
+import type { PublicRequest, SignerState } from '../../shared/model'
 
 export const esc = (v: unknown) =>
   String(v).replace(/[&<>"']/g, (c) =>
@@ -9,6 +8,12 @@ export const esc = (v: unknown) =>
   )
 
 export const name = (p: string) => p[0]!.toUpperCase() + p.slice(1)
+
+export const shortSlot = (slotId: string) =>
+  slotId.slice(0, 10) + '…' + slotId.slice(-6)
+
+export const signerLabel = (s: SignerState) =>
+  s.name ? name(s.name) : shortSlot(s.slotId)
 
 export function Badge({ status }: { status: PublicRequest['status'] }) {
   const closed = ['declined', 'cancelled'].includes(status)
@@ -24,12 +29,12 @@ export function Badge({ status }: { status: PublicRequest['status'] }) {
 export function Recipients({ r }: { r: PublicRequest }) {
   return (
     <>
-      {people.map((p) => (
-        <div className="person" key={p}>
-          <div className="avatar">{name(p)[0]}</div>
+      {r.signers.map((s) => (
+        <div className="person" key={s.slotId}>
+          <div className="avatar">{signerLabel(s)[0]}</div>
           <div>
-            <p>{name(p)}</p>
-            <small>{r.signers[p].phase.replaceAll('_', ' ')}</small>
+            <p>{signerLabel(s)}</p>
+            <small>{s.phase.replaceAll('_', ' ')}</small>
           </div>
         </div>
       ))}
