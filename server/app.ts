@@ -22,13 +22,34 @@ import {
 import {
   listSigners,
   listKeySlots,
+  listEncryptionKeys,
   hasSigner,
   addSigner,
   issueSignerCredential,
   issueRemoteSignerCredential,
   createSignerSlot,
 } from './signers'
-import { verifyBundle, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
+import { verifyBundle, digest, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
+import type {
+  EncryptionRecord,
+  EncryptionBundle,
+  EncryptionManifest,
+  EncryptionCiphertext,
+} from '../shared/encrypt'
+import {
+  createEncryptionSlot,
+  encryptDocument,
+  encryptionIdentity,
+  encryptionIssuerDid,
+  getEncryptionRecord,
+  listEncryptionRecords,
+  saveEncryptionRecord,
+  serializeCiphertext,
+  openDecryptSession,
+  decodeCiphertext,
+  decryptDocument,
+  type DecryptSession,
+} from './encryption'
 
 export type AppContext = { Variables: NonNullable<unknown> }
 
@@ -241,6 +262,273 @@ export function createApp() {
     return c.json(job)
   })
 
+  // Encryption: BLS identity-encryption key slots and document encryption.
+  type EncryptionKeyJob = {
+    id: string
+    name: string
+    status: 'running' | 'completed' | 'failed'
+    progress: string[]
+    result?: { name: string; slotId: Hex }
+    error?: string
+  }
+  const encryptionKeyJobs = new Map<string, EncryptionKeyJob>()
+
+  app.get('/api/encryption/keys', async (c) => {
+    const keys = await listKeySlots('bls')
+    return c.json(
+      keys.map((k) => ({
+        ...k,
+        dcql: publicJson.issuerDid
+          ? JSON.parse(
+              tasra.credentials.policy({
+                issuer: publicJson.issuerDid,
+                type: 'DocumentReader',
+                claims: k.name ? { key: [k.name] } : undefined,
+                identityScope: { claim: 'documents' },
+              }),
+            )
+          : undefined,
+      })),
+    )
+  })
+
+  app.post('/api/encryption/keys', async (c) => {
+    const b = await readBody(c)
+    const name = text(b.name).trim().toLowerCase()
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name))
+      throw new Conflict('Key name must be lowercase letters, digits and dashes')
+    if ([...encryptionKeyJobs.values()].some((j) => j.status === 'running'))
+      throw new Conflict('A key creation is already in progress')
+    const job: EncryptionKeyJob = { id: randomUUID(), name, status: 'running', progress: [] }
+    encryptionKeyJobs.set(job.id, job)
+    void (async () => {
+      try {
+        job.progress.push('Creating the BLS key slot…')
+        const slotId = await createEncryptionSlot(name, (message) =>
+          job.progress.push(message),
+        )
+        job.progress.push('Key slot ready')
+        job.status = 'completed'
+        job.result = { name, slotId }
+      } catch (e) {
+        job.status = 'failed'
+        job.error = (e as Error).message
+      }
+    })()
+    return c.json({ jobId: job.id }, 202)
+  })
+
+  app.get('/api/encryption/keys/jobs/:id', (c) => {
+    const job = encryptionKeyJobs.get(c.req.param('id'))
+    if (!job) throw new Conflict('Unknown key creation job')
+    return c.json(job)
+  })
+
+  app.post('/api/encryption/keys/:name/issue-vc', async (c) => {
+    const name = c.req.param('name')
+    if (!listEncryptionKeys().some((k) => k.name === name))
+      throw new Conflict('Unknown encryption key')
+    const offerUri = createOffer('DocumentReader', name, vciOrigin(c))
+    const dataUrl = await QRCode.toDataURL(offerUri)
+    return c.json({ offerUri, qrDataUrl: dataUrl })
+  })
+
+  app.get('/api/encryption/documents', (c) => c.json(listEncryptionRecords()))
+
+  app.get('/api/encryption/documents/:id', (c) =>
+    c.json(getEncryptionRecord(c.req.param('id'))),
+  )
+
+  app.get('/api/encryption/documents/:id/bundle', (c) => {
+    const record = getEncryptionRecord(c.req.param('id'))
+    const bundle: EncryptionBundle = {
+      manifest: record.manifest,
+      ciphertext: record.ciphertext,
+    }
+    return c.body(JSON.stringify(bundle, null, 2), 200, {
+      'content-type': 'application/json',
+      'content-disposition': 'attachment; filename="encrypted.json"',
+    })
+  })
+
+  app.post('/api/encryption/documents', async (c) => {
+    const b = await readBody(c)
+    const id = text(b.id)
+    const title = text(b.title)
+    const version = Number(b.version)
+    const slotId = text(b.slotId) as Hex
+    const pdf = Buffer.from(text(b.pdfBase64), 'base64')
+    if (
+      !title.trim() ||
+      title.length > 120 ||
+      pdf.length > 8 * 1024 * 1024 ||
+      new TextDecoder().decode(pdf.slice(0, 5)) !== '%PDF-' ||
+      !Number.isSafeInteger(version) ||
+      version < 1 ||
+      !/^0x[0-9a-f]{64}$/i.test(slotId) ||
+      !/^[0-9a-f-]{36}$/i.test(id)
+    )
+      throw new Conflict(
+        'Provide a PDF up to 8 MB, a title, a positive version and a BLS key slot',
+      )
+    const saved = listEncryptionRecords().find((r) => r.manifest.recordId === id)
+    if (saved) return c.json(saved)
+    const keyName = listEncryptionKeys().find(
+      (k) => k.slotId.toLowerCase() === slotId.toLowerCase(),
+    )?.name
+    if (!keyName) throw new Conflict('Unknown BLS encryption key')
+    const recipient = encryptionIssuerDid()
+    const identity = encryptionIdentity(keyName, id, version)
+    let ciphertext
+    try {
+      ciphertext = await encryptDocument(slotId, identity, pdf)
+    } catch (e) {
+      throw new Conflict(e instanceof Error ? e.message : 'Encryption failed')
+    }
+    const record: EncryptionRecord = {
+      manifest: {
+        schema: 'tasra-encrypt/v1',
+        recordId: id,
+        title: title.trim(),
+        version,
+        recipient,
+        identity,
+        documentSha256: await digest(pdf),
+        chainId: deployment.chainId,
+        keyRegistry: deployment.addresses.KeyRegistry!,
+        slotId: slotId.toLowerCase() as Hex,
+      },
+      ciphertext: serializeCiphertext(ciphertext),
+      pdfSize: pdf.length,
+      createdAt: new Date().toISOString(),
+    }
+    saveEncryptionRecord(record)
+    return c.json(record, 201)
+  })
+
+  // Decryption: an uploaded bundle names a key slot and identity; a remote wallet
+  // present its DocumentReader credential to authorize threshold extraction.
+  type DecryptEntry = {
+    manifest: EncryptionManifest
+    ciphertext: EncryptionCiphertext
+    session: DecryptSession
+    fileName: string
+    phase: 'awaiting_wallet' | 'decrypting' | 'done' | 'failed'
+    plaintextBase64?: string
+    pdfSize?: number
+    error?: string
+  }
+  const decryptSessions = new Map<string, DecryptEntry>()
+
+  app.post('/api/encryption/decrypt', async (c) => {
+    const b = await readBody(c)
+    const bundle = b.bundle as Partial<EncryptionBundle> | undefined
+    const manifest = bundle?.manifest
+    const ciphertext = bundle?.ciphertext
+    if (
+      !manifest ||
+      !ciphertext ||
+      manifest.schema !== 'tasra-encrypt/v1' ||
+      typeof manifest.identity !== 'string' ||
+      !manifest.identity.trim() ||
+      typeof manifest.title !== 'string' ||
+      !manifest.title.trim() ||
+      manifest.title.length > 120 ||
+      !Number.isSafeInteger(manifest.version) ||
+      manifest.version < 1 ||
+      !/^[0-9a-f-]{36}$/i.test(manifest.recordId) ||
+      typeof manifest.recipient !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(manifest.documentSha256) ||
+      manifest.chainId !== deployment.chainId ||
+      manifest.keyRegistry.toLowerCase() !==
+        deployment.addresses.KeyRegistry!.toLowerCase() ||
+      !/^0x[0-9a-f]{64}$/i.test(manifest.slotId) ||
+      typeof ciphertext.u !== 'string' ||
+      typeof ciphertext.nonce !== 'string' ||
+      typeof ciphertext.aeadCt !== 'string'
+    )
+      throw new Conflict('Upload a valid Tasra encryption bundle')
+    const slotId = manifest.slotId.toLowerCase() as Hex
+    if (!listEncryptionKeys().some((k) => k.slotId.toLowerCase() === slotId))
+      throw new Conflict('Unknown BLS encryption key')
+    const session = await openDecryptSession(
+      slotId,
+      manifest.identity,
+      `Decrypt ${manifest.title} (version ${manifest.version})`,
+    )
+    const fileName = `${manifest.title.replace(/[^\w.-]+/g, '_')} (v${manifest.version}).pdf`
+    const id = randomUUID()
+    decryptSessions.set(id, {
+      manifest,
+      ciphertext,
+      session,
+      fileName,
+      phase: 'awaiting_wallet',
+    })
+    return c.json({
+      id,
+      qrPayload: session.qrPayload,
+      qrDataUrl: await QRCode.toDataURL(session.qrPayload),
+      manifest,
+    })
+  })
+
+  app.post('/api/encryption/decrypt/:id/status', async (c) => {
+    const entry = decryptSessions.get(c.req.param('id'))
+    if (!entry) throw new Conflict('Unknown decryption session')
+    if (entry.phase === 'done')
+      return c.json({
+        status: 'done',
+        plaintextBase64: entry.plaintextBase64,
+        pdfSize: entry.pdfSize,
+        fileName: entry.fileName,
+      })
+    if (entry.phase === 'failed')
+      return c.json({ status: 'failed', error: entry.error })
+    if (entry.phase === 'decrypting') return c.json({ status: 'processing' })
+    const status = await pollOid4vpSession(
+      verifierAgentUrl,
+      entry.session.sessionId,
+      entry.session.pollSecret,
+    )
+    if (status.status !== 'done')
+      return c.json({
+        status: 'awaiting',
+        qrPayload: entry.session.qrPayload,
+        qrDataUrl: await QRCode.toDataURL(entry.session.qrPayload),
+      })
+    entry.phase = 'decrypting'
+    try {
+      const plaintext = await decryptDocument(
+        entry.session,
+        decodeCiphertext(entry.ciphertext),
+        () => {},
+      )
+      try {
+        entry.plaintextBase64 = Buffer.from(plaintext).toString('base64')
+        entry.pdfSize = plaintext.length
+      } finally {
+        plaintext.fill(0)
+      }
+      entry.phase = 'done'
+      return c.json({
+        status: 'done',
+        plaintextBase64: entry.plaintextBase64,
+        pdfSize: entry.pdfSize,
+        fileName: entry.fileName,
+      })
+    } catch (e) {
+      entry.phase = 'failed'
+      entry.error =
+        e instanceof Error && e.name === 'AuthorizationRefused'
+          ? 'The verifier refused this credential'
+          : e instanceof Error
+            ? e.message
+            : 'Decryption failed'
+      return c.json({ status: 'failed', error: entry.error })
+    }
+  })
+
   // OpenID4VCI issuer: a remote wallet scans the QR and receives a DocumentSigner SD-JWT.
   const vciOrigin = (c: Context) => new URL(c.req.url).origin
 
@@ -271,7 +559,7 @@ export function createApp() {
     const name = c.req.param('name')
     if (!listSigners().some((s) => s.name === name))
       throw new Conflict('Unknown signer')
-    const offerUri = createOffer(name, vciOrigin(c))
+    const offerUri = createOffer('DocumentSigner', name, vciOrigin(c))
     const dataUrl = await QRCode.toDataURL(offerUri)
     return c.json({ offerUri, qrDataUrl: dataUrl })
   })
@@ -327,15 +615,22 @@ export function createApp() {
         credential_configuration_id?: string
         proofs?: { jwt?: string[] }
       }
-      if (b.credential_configuration_id !== 'DocumentSigner')
+      const credentialKind = b.credential_configuration_id
+      if (credentialKind !== 'DocumentSigner' && credentialKind !== 'DocumentReader')
         return c.json({ error: 'unsupported_credential_type', error_description: 'Unsupported credential configuration' }, 400)
       const proof = b.proofs?.jwt?.[0]
       if (!proof)
         return c.json({ error: 'invalid_request', error_description: 'Missing holder proof' }, 400)
-      const { holderDid, signerName } = verifyProofJwt(token, proof, vciOrigin(c))
-      const credential = issueForHolder(signerName, holderDid)
+      const { holderDid, credentialKind: exchangeKind, name } = verifyProofJwt(
+        token,
+        proof,
+        vciOrigin(c),
+      )
+      if (exchangeKind !== credentialKind)
+        return c.json({ error: 'invalid_proof', error_description: 'Credential configuration does not match the offer' }, 400)
+      const credential = issueForHolder(credentialKind, name, holderDid)
       console.log(
-        `[vci] issued DocumentSigner VC for signer=${signerName} holder=${holderDid}`,
+        `[vci] issued ${credentialKind} VC for name=${name} holder=${holderDid}`,
       )
       console.log('[vci] compact:', credential)
       console.log('[vci] claims:', JSON.stringify(sdJwtClaims(parseSdJwt(credential)), null, 2))

@@ -13,6 +13,25 @@ export type SignerRecord = { name: string; slotId: Hex; holderKey?: Jwk }
 export type KeySlotOption = { slotId: Hex; name?: string }
 
 const signersFile = join(stateDirectory, 'signers.json')
+const encryptionKeysFile = join(stateDirectory, 'encryption-keys.json')
+
+export type NamedKey = { name: string; slotId: Hex }
+
+export function listEncryptionKeys(): NamedKey[] {
+  if (!existsSync(encryptionKeysFile)) return []
+  const data = JSON.parse(readFileSync(encryptionKeysFile, 'utf8')) as {
+    schema: string
+    keys: NamedKey[]
+  }
+  return data.schema === 'tasra-encryption-keys/v1' ? data.keys : []
+}
+
+export function addEncryptionKey(record: NamedKey): NamedKey[] {
+  const keys = listEncryptionKeys().filter((k) => k.name !== record.name)
+  const next = [...keys, record]
+  atomicSave(encryptionKeysFile, { schema: 'tasra-encryption-keys/v1', keys: next })
+  return next
+}
 
 // Funding budget in integer base units: EURC has 6 decimals; TSRA has 18.
 const slotCredit = 1n * 10n ** 18n // deposit 1 TSRA into each slot
@@ -59,8 +78,8 @@ function explorerUrl(): string {
   )
 }
 
-/** Merge the signer registry with every FROST slot the on-chain registry reports. */
-export async function listKeySlots(): Promise<KeySlotOption[]> {
+/** List only the named slots of the requested mode still present on-chain. */
+export async function listKeySlots(mode: 'frost' | 'bls' = 'frost'): Promise<KeySlotOption[]> {
   const response = await fetch(explorerUrl() + '/api/slots', {
     signal: AbortSignal.timeout(15000),
   })
@@ -69,17 +88,13 @@ export async function listKeySlots(): Promise<KeySlotOption[]> {
     slots?: Array<{ slotId: string; mode: string; exists: boolean; cancelled: boolean }>
   }
   const slots = (data.slots ?? []).filter(
-    (s) => s.mode === 'frost' && s.exists && !s.cancelled,
+    (s) => s.mode === mode && s.exists && !s.cancelled,
   )
   const existing = new Set(slots.map((s) => s.slotId.toLowerCase()))
-  const named = listSigners()
+  const named = mode === 'frost' ? listSigners() : listEncryptionKeys()
+  return named
     .filter((s) => existing.has(s.slotId.toLowerCase()))
     .map((s) => ({ slotId: s.slotId, name: s.name }))
-  const knownIds = new Set(named.map((s) => s.slotId.toLowerCase()))
-  const unknown = slots
-    .filter((s) => !knownIds.has(s.slotId.toLowerCase()))
-    .map((s) => ({ slotId: s.slotId.toLowerCase() as Hex }))
-  return [...named, ...unknown]
 }
 
 export function addSigner(record: SignerRecord): SignerRecord[] {
@@ -152,7 +167,7 @@ const slotStepLabel: Record<string, string> = {
   ready: 'Key slot ready',
 }
 
-function slotProgressMessage(p: { step: string; phase: string }): string {
+export function slotProgressMessage(p: { step: string; phase: string }): string {
   const label = slotStepLabel[p.step] ?? p.step
   const suffix =
     p.phase === 'confirmed' || p.phase === 'complete' ? ` — ${p.phase}` : ''
@@ -179,7 +194,7 @@ async function writeClient(creator: ReturnType<typeof tasra.wallets.create>) {
   })
 }
 
-async function fundNewSlot(
+export async function fundNewSlot(
   creator: ReturnType<typeof tasra.wallets.create>,
   slotId: Hex,
   onProgress: (message: string) => void,

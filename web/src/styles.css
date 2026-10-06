@@ -354,6 +354,14 @@ input[type='checkbox'] {
   border-radius: 5px;
   background: #fbfcfa;
   margin-bottom: 20px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.drop.dragging {
+  border-color: var(--forest);
+  background: #e9f1eb;
 }
 .drop p {
   font-size: 14px;
@@ -564,6 +572,43 @@ footer {
 }
 .hidden {
   display: none !important;
+}
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26px;
+  align-items: stretch;
+}
+.landing-card {
+  display: flex;
+  flex-direction: column;
+}
+.landing-card h2 {
+  font-size: 24px;
+  letter-spacing: -0.5px;
+  margin-top: 10px;
+}
+.landing-card .sub {
+  flex: 1;
+}
+.landing-card .button {
+  align-self: flex-start;
+  margin-top: 6px;
+}
+.landing-points {
+  margin: 0 0 20px;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.9;
+}
+input[type='radio'] {
+  accent-color: var(--forest);
+}
+@media (max-width: 850px) {
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
 }
 @media (max-width: 850px) {
   .grid {

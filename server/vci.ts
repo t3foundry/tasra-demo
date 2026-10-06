@@ -23,7 +23,8 @@ const IAT_WINDOW_AFTER_MS = 60 * 1000
 type Exchange = {
   offerCode: string
   authCode: string
-  signerName: string
+  credentialKind: 'DocumentSigner' | 'DocumentReader'
+  name: string
   nonce?: string
   nonceIssuedAt: number
   tokenAt: number
@@ -62,13 +63,29 @@ function signerIssuer() {
   return tasra.identities.create({ seed: hexToBytes(readIssuerSeed()) })
 }
 
-export function issueForHolder(signerName: string, holderDid: string): string {
+export function issueForHolder(
+  credentialKind: 'DocumentSigner' | 'DocumentReader',
+  name: string,
+  holderDid: string,
+): string {
   const issuer = signerIssuer()
   try {
+    if (credentialKind === 'DocumentReader') {
+      return issueSdJwtVc({
+        issuer: issuer.issuer,
+        vct: 'DocumentReader',
+        cnf: holderCnf({ did: holderDid }),
+        claims: {
+          key: name,
+          documents: [`${issuer.did}/keys/${name}/*`],
+        },
+        ttlSecs: 365 * 24 * 60 * 60,
+      })
+    }
     return issueSdJwtVc({
       issuer: issuer.issuer,
       vct: 'DocumentSigner',
-      sub: 'did:demo:' + signerName,
+      sub: 'did:demo:' + name,
       cnf: holderCnf({ did: holderDid }),
       claims: { role: 'document-signer' },
       ttlSecs: 365 * 24 * 60 * 60,
@@ -85,13 +102,18 @@ function purgeExpired() {
     if (!exchanges.has(code)) tokens.delete(token)
 }
 
-export function createOffer(signerName: string, issuerBaseUrl: string): string {
+export function createOffer(
+  credentialKind: 'DocumentSigner' | 'DocumentReader',
+  name: string,
+  issuerBaseUrl: string,
+): string {
   purgeExpired()
   const code = randomUUID().replaceAll('-', '')
   exchanges.set(code, {
     offerCode: code,
     authCode: randomUUID(),
-    signerName,
+    credentialKind,
+    name,
     nonce: undefined,
     nonceIssuedAt: 0,
     tokenAt: 0,
@@ -101,7 +123,7 @@ export function createOffer(signerName: string, issuerBaseUrl: string): string {
   saveState()
   const offerObject = {
     credential_issuer: issuerBaseUrl,
-    credential_configuration_ids: ['DocumentSigner'],
+    credential_configuration_ids: [credentialKind],
     grants: {
       [PRE_AUTHORIZED_GRANT]: {
         'pre-authorized_code': code,
@@ -125,6 +147,12 @@ export function issuerMetadata(issuerBaseUrl: string): Record<string, unknown> {
       DocumentSigner: {
         format: 'dc+sd-jwt',
         vct: 'DocumentSigner',
+        cryptographic_binding_methods_supported: ['did:jwk'],
+        credential_signing_alg_values_supported: ['ES256'],
+      },
+      DocumentReader: {
+        format: 'dc+sd-jwt',
+        vct: 'DocumentReader',
         cryptographic_binding_methods_supported: ['did:jwk'],
         credential_signing_alg_values_supported: ['ES256'],
       },
@@ -162,7 +190,7 @@ function getExchangeByToken(token: string): Exchange | undefined {
 export function exchangeToken(code: string): {
   access_token: string
   c_nonce: string
-  signerName: string
+  name: string
 } {
   const exchange = getExchangeByCode(code)
   if (exchange.done) throw new Error('Credential offer already redeemed')
@@ -173,7 +201,7 @@ export function exchangeToken(code: string): {
   const accessToken = 'tasra-' + randomUUID()
   tokens.set(accessToken, code)
   saveState()
-  return { access_token: accessToken, c_nonce: nonce, signerName: exchange.signerName }
+  return { access_token: accessToken, c_nonce: nonce, name: exchange.name }
 }
 
 export function issueNonce(token: string): string {
@@ -197,7 +225,7 @@ export function verifyProofJwt(
   token: string,
   proof: string,
   expectedAud: string,
-): { holderDid: string; signerName: string } {
+): { holderDid: string; credentialKind: 'DocumentSigner' | 'DocumentReader'; name: string } {
   const exchange = getExchangeByToken(token)
   if (!exchange) throw new Error('Invalid or expired access token')
   if (!exchange.nonce) throw new Error('Exchange has no live nonce')
@@ -237,7 +265,7 @@ export function verifyProofJwt(
   if (!payload.nonce || !constantTimeEqual(payload.nonce, exchange.nonce))
     throw new Error('Proof nonce differs from the exchange nonce')
 
-  const signerName = exchange.signerName
+  const name = exchange.name
 
   // Success burns the exchange + token: completed/expired exchanges 401 (§7, §13).
   exchange.done = true
@@ -245,5 +273,5 @@ export function verifyProofJwt(
   tokens.delete(token)
   saveState()
 
-  return { holderDid, signerName }
+  return { holderDid, credentialKind: exchange.credentialKind, name }
 }
