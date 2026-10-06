@@ -26,6 +26,11 @@ services:
       # --- Optional ---
       # Private sender-console bearer token; generated if omitted.
       TASRA_SENDER_TOKEN: ${TASRA_SENDER_TOKEN:-}
+      # Public HTTPS origin advertised in credential offers. Required behind a
+      # TLS-terminating proxy so the wallet receives an https:// issuer URL.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      # Set to 1 to honor X-Forwarded-* from a trusted proxy; prefer PUBLIC_ORIGIN.
+      TRUST_PROXY: ${TRUST_PROXY:-}
       # Bind address and port are already set by the image (0.0.0.0:4177).
     volumes:
       # Persistent, private state: wallets, requests, SDK journals, writer lock.

@@ -58,6 +58,51 @@ const serverPublic = join(import.meta.dirname, 'public')
 const webDist = join(root, 'web', 'dist')
 const webPublic = join(root, 'web', 'public')
 
+/**
+ * The public origin this server is reachable at. Behind a TLS-terminating reverse
+ * proxy (nginx ingress, Cloudflare, etc.) the Node process sees an `http://`
+ * request even though clients use `https://`, so `c.req.url` must not be trusted
+ * for credential-issuer URLs — the wallet would be handed an HTTP issuer and be
+ * blocked as mixed content.
+ *
+ * Resolution order:
+ *  1. `PUBLIC_ORIGIN` env var (explicit, canonical) — recommended for deploys.
+ *  2. `X-Forwarded-Proto`/`X-Forwarded-Host` — only when `TRUST_PROXY` is set.
+ *  3. The request URL — localhost/dev fallback.
+ */
+function firstForwarded(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  for (const part of value.split(',')) {
+    const trimmed = part.trim()
+    if (trimmed) return trimmed
+  }
+  return undefined
+}
+
+function publicOrigin(c: Context): string {
+  const configured = process.env.PUBLIC_ORIGIN
+  if (configured) {
+    const url = new URL(configured)
+    // Fail closed: a public deployment must advertise itself over https.
+    if (
+      url.protocol !== 'https:' &&
+      url.hostname !== 'localhost' &&
+      url.hostname !== '127.0.0.1'
+    ) {
+      throw new Error('PUBLIC_ORIGIN must be an https:// origin when publicly reachable')
+    }
+    return url.origin
+  }
+
+  if (/^(1|true|yes)$/i.test(process.env.TRUST_PROXY ?? '')) {
+    const proto = firstForwarded(c.req.header('x-forwarded-proto'))
+    const host = firstForwarded(c.req.header('x-forwarded-host'))
+    if (proto && host) return `${proto}://${host}`
+  }
+
+  return new URL(c.req.url).origin
+}
+
 function lookup(...paths: string[]) {
   for (const p of paths) if (existsSync(p)) return p
   return undefined
@@ -530,7 +575,7 @@ export function createApp() {
   })
 
   // OpenID4VCI issuer: a remote wallet scans the QR and receives a DocumentSigner SD-JWT.
-  const vciOrigin = (c: Context) => new URL(c.req.url).origin
+  const vciOrigin = (c: Context) => publicOrigin(c)
 
   // The wallet is a browser PWA on a different origin (e.g. the Tasra Vault). Reflect the
   // request origin so it may fetch this local issuer cross-origin and complete redemption.

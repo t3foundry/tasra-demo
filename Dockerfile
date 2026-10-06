@@ -33,6 +33,9 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 FROM node:22-slim AS runtime
 
+# Set PUBLIC_ORIGIN to the public https:// URL behind the TLS proxy (e.g.
+# https://demo.tasra.network) so credential offers advertise an HTTPS issuer.
+# Set TRUST_PROXY=1 as an alternative when the proxy sets X-Forwarded-*.
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=4177 \

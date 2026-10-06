@@ -71,6 +71,14 @@ spec:
               value: "4177"
             - name: TASRA_SIGN_DATA
               value: "/data"
+            # Public HTTPS origin advertised in credential offers. Required behind
+            # a TLS-terminating ingress so the wallet receives an https:// issuer.
+            - name: PUBLIC_ORIGIN
+              value: "https://demo.tasra.network"
+            # Set to "1" to honor X-Forwarded-* from the ingress instead; prefer
+            # PUBLIC_ORIGIN when the external URL is fixed.
+            - name: TRUST_PROXY
+              value: ""
           envFrom:
             - secretRef:
                 name: tasra-demo-secrets
