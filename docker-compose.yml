@@ -1,0 +1,35 @@
+# Docker Compose deployment reference for the Tasra Sign demo.
+#
+# Secrets come from the environment (or a `.env` file); they are never baked into
+# the image. The container auto-runs `npm run setup` on first start and then
+# serves the app on port 4177.
+#
+# Usage:
+#   cp .env.example .env          # fill in the real values
+#   docker compose up -d
+#
+# The image is built and pushed to GHCR by .github/workflows/docker.yml, tagged
+# as `latest` on the `main` branch (ghcr.io/t3foundry/tasra-demo:latest).
+
+services:
+  tasra-demo:
+    image: ghcr.io/t3foundry/tasra-demo:latest
+    restart: unless-stopped
+    ports:
+      - "4177:4177"
+    environment:
+      # --- Required secrets ---
+      # The private key of the locally-funded Fuji C-Chain address (>= 0.05 AVAX).
+      TASRA_CREATOR_KEY: ${TASRA_CREATOR_KEY}
+      # The identity signing seed (0x-prefixed 64 hex chars).
+      TASRA_ISSUER_SEED: ${TASRA_ISSUER_SEED}
+      # --- Optional ---
+      # Private sender-console bearer token; generated if omitted.
+      TASRA_SENDER_TOKEN: ${TASRA_SENDER_TOKEN:-}
+      # Bind address and port are already set by the image (0.0.0.0:4177).
+    volumes:
+      # Persistent, private state: wallets, requests, SDK journals, writer lock.
+      - tasra-data:/data
+
+volumes:
+  tasra-data:

@@ -6,3 +6,9 @@ web/public/pdf-assets/
 *.log
 .DS_Store
 /src/.tasra/
+
+# Local secrets for docker-compose
+.env
+
+# Scratch / generated test output
+encrypted.json

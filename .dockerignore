@@ -1,0 +1,17 @@
+# VCS and tooling
+.git
+.gitignore
+.idea
+.agent
+.github
+.DS_Store
+*.log
+
+# Never package local secrets/state or stale build artifacts
+node_modules
+server/.tasra
+web/dist
+web/public/pdf-assets
+
+# Scratch files
+encrypted.json

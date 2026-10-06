@@ -1,0 +1,120 @@
+# Kubernetes deployment reference for the Tasra Sign demo.
+#
+# The image is built and pushed to GHCR by .github/workflows/docker.yml
+# (ghcr.io/t3foundry/tasra-demo). Secrets are supplied to the pod at runtime
+# through a Secret; they are never baked into the image.
+#
+# Usage:
+#   kubectl create secret generic tasra-demo-secrets \
+#     --from-literal=TASRA_CREATOR_KEY=0x... \
+#     --from-literal=TASRA_ISSUER_SEED=0x... \
+#     [--from-literal=TASRA_SENDER_TOKEN=...]
+#   kubectl apply -f deploy/k8s.yaml
+#
+# NOTE: this demo is a single-writer application. The server refuses to start
+# if a second writer touches the same state directory, so exactly one replica
+# owns the PersistentVolumeClaim. Scale to 1 replica; do not run >1.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tasra-demo-secrets
+type: Opaque
+# Fill these in via `kubectl create secret` rather than committing real values.
+stringData:
+  TASRA_CREATOR_KEY: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  TASRA_ISSUER_SEED: "0x0000000000000000000000000000000000000000000000000000000000000000"
+  TASRA_SENDER_TOKEN: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tasra-demo-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tasra-demo
+spec:
+  serviceName: tasra-demo
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tasra-demo
+  template:
+    metadata:
+      labels:
+        app: tasra-demo
+    spec:
+      securityContext:
+        # Run as uid 1000 (the image's `node` user) so it can write /data.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: tasra-demo
+          image: ghcr.io/t3foundry/tasra-demo:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 4177
+          env:
+            - name: HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "4177"
+            - name: TASRA_SIGN_DATA
+              value: "/data"
+          envFrom:
+            - secretRef:
+                name: tasra-demo-secrets
+          readinessProbe:
+            httpGet:
+              path: /api/config
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/config
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tasra-demo
+spec:
+  type: ClusterIP
+  selector:
+    app: tasra-demo
+  ports:
+    - name: http
+      port: 4177
+      targetPort: http
