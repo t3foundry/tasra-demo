@@ -21,7 +21,9 @@ function Header() {
     <header>
       <div className="bar">
         <a className="brand" href="/">
-          Tasra Sign <span className="label">LOCAL DEMO</span>
+          <img className="brand-logo" src="/tasra-logo.png" alt="" />
+          <span className="brand-name">Tasra Sign</span>
+          <span className="label">LOCAL DEMO</span>
         </a>
         {signing ? (
           <nav aria-label="Main">

@@ -44,7 +44,15 @@ header {
   font-weight: 650;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+}
+.brand-logo {
+  height: 34px;
+  width: auto;
+  display: block;
+}
+.brand-name {
+  margin-left: 2px;
 }
 .label {
   font:
