@@ -7,26 +7,43 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #203c2c;
-  background: #f7f7f5;
+  color: #000000;
+  background: #ffffff;
   font-synthesis: none;
-  --forest: #1a3c2b;
-  --line: #d9ded7;
-  --muted: #647166;
+  --ink: #000000;
+  --body: #333333;
+  --muted: #707070;
+  --line: #e0e0e0;
+  --offwhite: #f8f9fa;
+  --brand: #107595;
+  --brand-deep: #133a76;
+  --success: #2ba76d;
+  --success-soft: #e7f6ee;
+  --success-line: #cfe8d9;
+  --warn: #f68f24;
+  --warn-soft: #fdf1e2;
+  --warn-line: #f4ddb8;
+  --gold: #f3ac26;
+  --lime: #7cb843;
+  --danger: #e33224;
+  --danger-soft: #fdeae7;
+  --danger-line: #f2c9c3;
+  --purple: #662465;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
+  color: var(--ink);
 }
 a {
   color: inherit;
   text-underline-offset: 4px;
 }
 header {
-  background: #fff;
-  border-bottom: 1px solid var(--line);
+  background: var(--brand);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.14);
 }
 .bar {
   max-width: 1240px;
@@ -39,20 +56,30 @@ header {
 }
 .brand {
   text-decoration: none;
+  color: #fff;
   font-size: 22px;
   letter-spacing: -0.8px;
-  font-weight: 650;
+  font-weight: 700;
   display: flex;
   align-items: center;
   gap: 10px;
 }
 .brand-logo {
-  height: 34px;
-  width: auto;
+  height: 40px;
+  width: 40px;
+  padding: 5px;
+  background: #fff;
+  border-radius: 50%;
+  object-fit: contain;
   display: block;
 }
 .brand-name {
   margin-left: 2px;
+}
+.brand .label {
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.1);
 }
 .label {
   font:
@@ -60,10 +87,10 @@ header {
     monospace;
   letter-spacing: 1px;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 4px 6px;
   color: var(--muted);
-  background: #f7f7f5;
+  background: var(--offwhite);
 }
 .bar nav {
   display: flex;
@@ -72,6 +99,11 @@ header {
 }
 .bar nav a {
   text-decoration: none;
+  color: #fff;
+}
+.bar nav a:hover {
+  color: #cdeaf2;
+  text-decoration: underline;
 }
 main {
   max-width: 1240px;
@@ -80,23 +112,26 @@ main {
 }
 h1 {
   font-size: 34px;
-  font-weight: 600;
-  letter-spacing: -1.2px;
+  font-weight: 800;
+  letter-spacing: -1.4px;
   line-height: 1.15;
   margin: 12px 0;
+  color: var(--ink);
 }
 h2 {
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 18px;
+  color: var(--ink);
 }
 h3 {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 12px;
+  color: var(--ink);
 }
 p {
-  line-height: 1.65;
+  line-height: 1.5;
 }
 .muted,
 .sub {
@@ -129,8 +164,28 @@ p {
 .panel {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-top: 4px solid var(--accent, transparent);
+  border-radius: 4px;
   padding: 26px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+.route-signing {
+  --accent: var(--brand-deep);
+}
+.route-signers {
+  --accent: var(--brand);
+}
+.route-verify {
+  --accent: var(--success);
+}
+.route-encryption {
+  --accent: var(--purple);
+}
+.route-decryption {
+  --accent: var(--gold);
+}
+.route-signer {
+  --accent: var(--warn);
 }
 .stack {
   display: grid;
@@ -138,23 +193,23 @@ p {
 }
 .badge {
   display: inline-block;
-  background: #fff3cd;
-  color: #664d03;
-  border: 1px solid #f4e6b4;
+  background: var(--warn-soft);
+  color: #8a4d00;
+  border: 1px solid var(--warn-line);
   font-size: 12px;
   border-radius: 4px;
   padding: 5px 10px;
   white-space: nowrap;
 }
 .badge.done {
-  background: #e1eee4;
-  border-color: #c8dfce;
-  color: #205a35;
+  background: var(--success-soft);
+  border-color: var(--success-line);
+  color: #1e7a4a;
 }
 .badge.closed {
-  background: #f4e6e3;
-  border-color: #e7cac3;
-  color: #813e30;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: #c0392b;
 }
 .meta {
   display: flex;
@@ -166,7 +221,7 @@ p {
 }
 .pdf {
   padding: 0;
-  background: #e9ece7;
+  background: var(--offwhite);
   overflow: hidden;
 }
 .pdf-head {
@@ -203,7 +258,7 @@ p {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--forest);
+  background: var(--brand-deep);
   color: white;
   font-size: 14px;
 }
@@ -221,7 +276,7 @@ p {
   height: 7px;
   width: 7px;
   border-radius: 50%;
-  background: #739f79;
+  background: var(--success);
   display: inline-block;
   margin-right: 5px;
 }
@@ -233,11 +288,12 @@ p {
 button {
   font: inherit;
   font-size: 14px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
-  color: var(--forest);
-  padding: 11px 16px;
+  font-weight: 600;
+  border: 2px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  padding: 9px 15px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -245,16 +301,26 @@ button {
   gap: 8px;
   text-decoration: none;
   line-height: 1.3;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 button.primary,
 .button.primary {
-  background: var(--forest);
-  color: white;
-  border-color: var(--forest);
+  background: var(--brand-deep);
+  color: #fff;
+  border-color: var(--brand-deep);
+}
+button.primary:hover,
+.button.primary:hover {
+  background: var(--brand);
+  border-color: var(--brand);
 }
 button:hover,
 .button:hover {
-  filter: brightness(0.96);
+  border-color: var(--brand-deep);
+  color: var(--brand-deep);
 }
 button:disabled {
   opacity: 0.45;
@@ -271,7 +337,7 @@ button:disabled {
 }
 button.small,
 .button.small {
-  padding: 8px 11px;
+  padding: 7px 10px;
   font-size: 12px;
 }
 label {
@@ -282,7 +348,7 @@ label {
 input[type='text'],
 input[type='number'] {
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 11px 12px;
   font: inherit;
   color: inherit;
@@ -295,7 +361,7 @@ input[type='file'] {
   font-size: 12px;
 }
 input[type='checkbox'] {
-  accent-color: var(--forest);
+  accent-color: var(--brand-deep);
   width: 17px;
   height: 17px;
   flex-shrink: 0;
@@ -317,10 +383,10 @@ input[type='checkbox'] {
   font-size: 13px;
 }
 .wallet {
-  background: #f7f7f5;
+  background: var(--offwhite);
   padding: 14px;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   margin-top: 18px;
 }
 .wallet p {
@@ -339,28 +405,28 @@ input[type='checkbox'] {
   line-height: 1.6;
 }
 .error {
-  color: #813e30;
-  background: #fbefeb;
-  border: 1px solid #eed7cd;
+  color: #c0392b;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
   padding: 12px;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 13px;
   line-height: 1.5;
 }
 .success {
-  color: #205a35;
-  background: #edf5ee;
-  border: 1px solid #d4e5d7;
+  color: #1e7a4a;
+  background: var(--success-soft);
+  border: 1px solid var(--success-line);
   padding: 14px;
-  border-radius: 5px;
+  border-radius: 4px;
   font-size: 13px;
 }
 .drop {
-  border: 1px dashed #a2b5a7;
+  border: 1px dashed #b9b9b9;
   padding: 30px 20px;
   text-align: center;
-  border-radius: 5px;
-  background: #fbfcfa;
+  border-radius: 4px;
+  background: var(--offwhite);
   margin-bottom: 20px;
   cursor: pointer;
   transition:
@@ -368,8 +434,8 @@ input[type='checkbox'] {
     background 0.15s ease;
 }
 .drop.dragging {
-  border-color: var(--forest);
-  background: #e9f1eb;
+  border-color: var(--brand);
+  background: #e8f4f7;
 }
 .drop p {
   font-size: 14px;
@@ -379,6 +445,64 @@ input[type='checkbox'] {
   margin: 0 auto;
   display: block;
   max-width: 260px;
+}
+.pdf-chosen {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--success-soft);
+  border: 1px solid var(--success-line);
+  border-radius: 4px;
+  padding: 14px 16px;
+}
+.pdf-chosen-icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--success);
+}
+.pdf-check-bg {
+  fill: #fff;
+  stroke: var(--success);
+}
+.pdf-chosen-info {
+  flex: 1;
+  min-width: 0;
+}
+.pdf-chosen-info strong {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pdf-chosen-info small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.pdf-remove {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--success-line);
+  background: #fff;
+  color: var(--success);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+.pdf-remove:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 .request {
   display: grid;
@@ -392,7 +516,7 @@ input[type='checkbox'] {
   border: 0;
 }
 .request strong {
-  font-weight: 550;
+  font-weight: 600;
   display: block;
   margin-bottom: 6px;
 }
@@ -402,7 +526,7 @@ input[type='checkbox'] {
 }
 .linkbox {
   word-break: break-all;
-  background: #f7f7f5;
+  background: var(--offwhite);
   border: 1px solid var(--line);
   padding: 10px;
   margin: 8px 0 10px;
@@ -432,7 +556,7 @@ input[type='checkbox'] {
 .vc-offer img {
   display: block;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   background: #fff;
 }
 .vc-offer .linkbox {
@@ -442,9 +566,9 @@ input[type='checkbox'] {
   max-height: 240px;
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 6px 12px;
-  background: #fbfcfa;
+  background: var(--offwhite);
 }
 .signer-list .consent {
   margin: 10px 0;
@@ -467,10 +591,10 @@ input[type='checkbox'] {
   left: 50%;
   transform: translateX(-50%);
   max-width: 90%;
-  background: #1a3c2b;
+  background: var(--brand-deep);
   color: #fff;
   padding: 13px 22px;
-  border-radius: 7px;
+  border-radius: 4px;
   box-shadow: 0 2px 15px #0002;
   font-size: 13px;
   z-index: 5;
@@ -494,8 +618,20 @@ footer .label {
   vertical-align: middle;
 }
 :focus-visible {
-  outline: 3px solid #97b9a1;
+  outline: 3px solid var(--brand);
   outline-offset: 3px;
+}
+header :focus-visible {
+  outline-color: #fff;
+}
+.watermark {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background-repeat: repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='300'%3E%3Ctext x='180' y='150' transform='rotate(-24 180 150)' text-anchor='middle' font-family='Inter,ui-sans-serif,sans-serif' font-size='30' font-weight='700' letter-spacing='8' fill='%23133A76'%3EDEMO / TESTNET%3C/text%3E%3C/svg%3E");
+  opacity: 0.05;
 }
 .back {
   font-size: 13px;
@@ -521,23 +657,23 @@ footer .label {
   color: var(--muted);
   margin-left: 8px;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 1px 7px;
   vertical-align: middle;
 }
 .dcql summary .tag.stored {
-  color: #205a35;
-  border-color: #c8dfce;
-  background: #e1eee4;
+  color: #1e7a4a;
+  border-color: var(--success-line);
+  background: var(--success-soft);
 }
 .dcql .wallet {
   margin-top: 4px;
 }
 .code {
   font: 12px/1.6 ui-monospace, monospace;
-  background: #f7f7f5;
+  background: var(--offwhite);
   border: 1px solid var(--line);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 14px;
   overflow-x: auto;
   white-space: pre;
@@ -562,7 +698,7 @@ footer .label {
 .modal {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 28px;
   width: min(560px, 92vw);
   box-shadow: 0 8px 40px #0004;
@@ -579,8 +715,8 @@ footer .label {
   color: var(--muted);
 }
 .progress li:last-child {
-  color: var(--forest);
-  font-weight: 550;
+  color: var(--brand-deep);
+  font-weight: 600;
 }
 .hidden {
   display: none !important;
@@ -594,6 +730,10 @@ footer .label {
 .landing-card {
   display: flex;
   flex-direction: column;
+  border-top: 4px solid var(--lime);
+}
+.landing-card:nth-child(2) {
+  border-top-color: var(--gold);
 }
 .landing-card h2 {
   font-size: 24px;
@@ -612,10 +752,10 @@ footer .label {
   padding-left: 18px;
   color: var(--muted);
   font-size: 14px;
-  line-height: 1.9;
+  line-height: 1.7;
 }
 input[type='radio'] {
-  accent-color: var(--forest);
+  accent-color: var(--brand-deep);
 }
 @media (max-width: 850px) {
   .landing-grid {

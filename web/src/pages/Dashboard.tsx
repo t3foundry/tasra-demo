@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, base64 } from '../api'
 import { digest, type PublicRequest } from '../../../shared/model'
 import { useNotice } from '../notice'
 import { Badge, Recipients, Timeline, Downloads, name, shortSlot } from '../components'
+import { PdfUpload, type PdfFile } from '../PdfUpload'
 
 type KeySlotOption = { slotId: string; name?: string }
 
@@ -12,13 +13,11 @@ export function Dashboard() {
   const [selected, setSelected] = useState<PublicRequest>()
   const [title, setTitle] = useState('Consulting agreement')
   const [version, setVersion] = useState('1')
-  const [chosen, setChosen] = useState('')
-  const [bytes, setBytes] = useState<Uint8Array>()
+  const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
   const [slotFilter, setSlotFilter] = useState('')
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     const l = await api<PublicRequest[]>('/requests')
@@ -56,10 +55,7 @@ export function Dashboard() {
   async function send() {
     setBusy(true)
     try {
-      const upload =
-        bytes ?? (fileRef.current?.files?.[0]
-          ? new Uint8Array(await fileRef.current.files[0].arrayBuffer())
-          : undefined)
+      const upload = pdf?.bytes
       if (!upload) throw new Error('Choose a PDF first')
       if (!selectedSlots.length) throw new Error('Select at least one signer')
       const fingerprint = JSON.stringify({
@@ -137,30 +133,7 @@ export function Dashboard() {
                 />
               </div>
             </div>
-            <div className="drop">
-              <p>Choose your PDF · up to 8 MB</p>
-              <input
-                id="pdf"
-                type="file"
-                accept="application/pdf"
-                onChange={() => {
-                  setBytes(undefined)
-                  setChosen(fileRef.current?.files?.[0]?.name ?? '')
-                }}
-                ref={fileRef}
-              />
-              <p className="hint">Or start with the included sample agreement.</p>
-              <button
-                className="small"
-                onClick={async () => {
-                  setBytes(new Uint8Array(await (await fetch('/sample.pdf')).arrayBuffer()))
-                  setChosen('Sample agreement selected')
-                }}
-              >
-                Use sample PDF
-              </button>
-            </div>
-            <p className="hint">{chosen}</p>
+            <PdfUpload file={pdf} onChange={setPdf} sampleUrl="/sample.pdf" />
             <div className="field">
               <label htmlFor="slot-filter">Signers</label>
               <input

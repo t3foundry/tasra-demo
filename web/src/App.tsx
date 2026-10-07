@@ -43,23 +43,41 @@ function Header() {
   )
 }
 
+function routeClass(pathname: string): string {
+  if (pathname === '/signing') return 'route-signing'
+  if (pathname === '/signers') return 'route-signers'
+  if (pathname === '/verify') return 'route-verify'
+  if (pathname === '/encryption') return 'route-encryption'
+  if (pathname === '/decryption') return 'route-decryption'
+  if (pathname.startsWith('/sign/')) return 'route-signer'
+  return ''
+}
+
+function Main() {
+  const { pathname } = useLocation()
+  return (
+    <main className={routeClass(pathname)}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/signing" element={<Dashboard />} />
+        <Route path="/encryption" element={<EncryptionPage />} />
+        <Route path="/decryption" element={<DecryptionPage />} />
+        <Route path="/signers" element={<SignersPage />} />
+        <Route path="/verify" element={<VerifyPage />} />
+        <Route path="/sign/:id/:slot" element={<SignerPage />} />
+      </Routes>
+    </main>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
+      <div className="watermark" aria-hidden="true" />
       <SenderProvider>
         <NoticeProvider>
           <Header />
-          <main>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/signing" element={<Dashboard />} />
-              <Route path="/encryption" element={<EncryptionPage />} />
-              <Route path="/decryption" element={<DecryptionPage />} />
-              <Route path="/signers" element={<SignersPage />} />
-              <Route path="/verify" element={<VerifyPage />} />
-              <Route path="/sign/:id/:slot" element={<SignerPage />} />
-            </Routes>
-          </main>
+          <Main />
           <footer>
             Built with Tasra SDK · Verified signatures and identity-scoped BLS encryption.
             <span className="label">v{import.meta.env.VITE_APP_VERSION}</span>
