@@ -481,6 +481,10 @@ footer {
   font-size: 11px;
   color: var(--muted);
 }
+footer .label {
+  margin-left: 8px;
+  vertical-align: middle;
+}
 :focus-visible {
   outline: 3px solid #97b9a1;
   outline-offset: 3px;

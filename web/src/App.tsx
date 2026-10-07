@@ -60,6 +60,7 @@ export default function App() {
           </main>
           <footer>
             Built with Tasra SDK · Verified signatures and identity-scoped BLS encryption.
+            <span className="label">v{import.meta.env.VITE_APP_VERSION}</span>
           </footer>
         </NoticeProvider>
       </SenderProvider>
