@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest, type PublicRequest } from '../../../shared/model'
 import { useNotice } from '../notice'
@@ -24,7 +25,6 @@ export function Dashboard() {
   const [busy, setBusy] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
-  const [slotFilter, setSlotFilter] = useState('')
 
   const load = useCallback(async () => {
     const l = await api<PublicRequest[]>('/requests')
@@ -52,12 +52,6 @@ export function Dashboard() {
         : [...prev, slotId],
     )
   }
-
-  const visibleSlots = slotFilter
-    ? allSlots.filter((s) =>
-        s.slotId.toLowerCase().includes(slotFilter.toLowerCase()),
-      )
-    : allSlots
 
   async function send() {
     setBusy(true)
@@ -154,41 +148,41 @@ export function Dashboard() {
               sampleHint="Or start with the included sample agreement."
             />
             <div className="field">
-              <label htmlFor="slot-filter">Signers</label>
-              <input
-                id="slot-filter"
-                type="text"
-                placeholder="Filter by key-slot ID…"
-                value={slotFilter}
-                onChange={(e) => setSlotFilter(e.target.value)}
-              />
+              <label>Signatures</label>
               {allSlots.length ? (
-                <div className="signer-list">
-                  {visibleSlots.map((slot) => (
-                    <label className="consent" key={slot.slotId}>
-                      <input
-                        type="checkbox"
-                        checked={selectedSlots.includes(slot.slotId)}
-                        onChange={() => toggle(slot.slotId)}
-                      />
-                      <span>
-                        {slot.name ? name(slot.name) : shortSlot(slot.slotId)}
-                        {slot.name ? (
-                          <small className="muted"> {shortSlot(slot.slotId)}</small>
-                        ) : null}
-                      </span>
-                    </label>
-                  ))}
-                  {visibleSlots.length === 0 ? (
-                    <p className="hint">No key slots match that ID.</p>
-                  ) : null}
-                </div>
+                <>
+                  <div className="signer-list">
+                    {allSlots.map((slot) => (
+                      <label className="consent" key={slot.slotId}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSlots.includes(slot.slotId)}
+                          onChange={() => toggle(slot.slotId)}
+                        />
+                        <span>
+                          {slot.name ? name(slot.name) : shortSlot(slot.slotId)}
+                          {slot.name ? (
+                            <small className="muted"> {shortSlot(slot.slotId)}</small>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <Link className="new-signature-link" to="/signers">
+                    + Create a new signature
+                  </Link>
+                </>
               ) : (
-                <p className="hint">Loading key slots from the registry…</p>
+                <div className="no-signatures">
+                  <p>No signatures yet. Create one to start signing documents.</p>
+                  <Link className="button small" to="/signers">
+                    Create a new signature
+                  </Link>
+                </div>
               )}
             </div>
             <p className="hint">
-              Sending freezes the PDF, version and the selected signers.
+              Sending freezes the PDF, version and the selected signatures.
             </p>
             <button
               className="primary"

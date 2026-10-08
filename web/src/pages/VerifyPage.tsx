@@ -6,8 +6,9 @@ type SlotLink = { name?: string; slotId: string }
 
 type VerifyResult = { title?: string; version?: number; signers?: SlotLink[] }
 
-const explorer = (slotId: string) =>
-  `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
+const EXPLORER = 'https://explorer.t3-foundry.fuji.tasra.network'
+
+const explorer = (slotId: string) => `${EXPLORER}/slots/${slotId}`
 
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
 
@@ -88,21 +89,31 @@ export function VerifyPage() {
           {status}
         </p>
         {slots.length ? (
-          <p className="hint">
-            Key slots:{' '}
-            {slots.map((s, i) => (
-              <span key={s.slotId}>
-                {i > 0 ? ' · ' : ''}
+          <div className="slots-callout">
+            <p className="slots-callout-title">
+              Visit Tasra Explorer to view details of each key slot:
+            </p>
+            <div className="slots-links">
+              {slots.map((s) => (
                 <a
+                  key={s.slotId}
                   href={explorer(s.slotId)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {signerName(s)}
+                  {signerName(s)} ↗
                 </a>
-              </span>
-            ))}
-          </p>
+              ))}
+            </div>
+            <a
+              className="slots-explorer-link"
+              href={EXPLORER}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open Tasra Explorer ↗
+            </a>
+          </div>
         ) : null}
       </section>
     </div>
