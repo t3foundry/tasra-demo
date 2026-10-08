@@ -1,13 +1,14 @@
 {
   "name": "tasra-test",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.12"
   },
   "scripts": {
-    "postinstall": "node scripts/copy-pdf-assets.mjs",
+    "postinstall": "node scripts/copy-pdf-assets.mjs && node scripts/install-hooks.mjs",
+    "hooks:install": "node scripts/install-hooks.mjs",
     "copy:pdf-assets": "node scripts/copy-pdf-assets.mjs",
     "setup": "node --import tsx server/setup.ts",
     "serve": "node --import tsx server/index.ts",

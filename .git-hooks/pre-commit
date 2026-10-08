@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null || true)
+[ -n "$branch" ] || exit 0
+
+upstream=$(git rev-parse --verify "@{upstream}" 2>/dev/null || true)
+[ -n "$upstream" ] || exit 0          # no upstream yet: keep the version as-is for the first push
+
+read_ver() {
+  git show "$1:package.json" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).version))"
+}
+
+head_ver=$(read_ver HEAD)
+upstream_ver=$(read_ver "$upstream")
+
+# Bump once per batch of work: only when HEAD still carries the remote's version.
+[ "$head_ver" = "$upstream_ver" ] || exit 0
+
+npm version patch --no-git-tag-version >/dev/null
+git add package.json package-lock.json
+exit 0

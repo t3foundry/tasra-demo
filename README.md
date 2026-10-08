@@ -118,6 +118,17 @@ npm run serve
 | `npm test` | Offline workflow tests (`node:test`, fake backend + tempdir stores). |
 | `npm run fund-slot -- <state-dir> status\|buy\|fund\|mint-test-eurc [amount] [min] [--slot 0x…]` | Inspect/fund a slot and mint test EURC. |
 | `npm run verify -- document.pdf expected-request.json signatures.json` | Verify a saved bundle offline. |
+| `npm run hooks:install` | Point git at the repo's committed hooks (also run automatically on `npm install`). |
+
+## Git hooks
+
+A `pre-commit` hook (`.git-hooks/pre-commit`) bumps the `package.json`/`package-lock.json`
+patch version and stages the change so it ships inside the commit. It bumps **once per batch
+of work** — only when `HEAD` still carries the remote's version — so a multi-commit push
+increments the version a single time. It no-ops on the first push (no `@{upstream}` yet).
+
+The bump lives in `pre-commit` rather than `pre-push` because Git snapshots the refs to push
+*before* running `pre-push`, so a bump made there can never be included in the current push.
 
 ## Configuration
 
