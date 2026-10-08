@@ -68,6 +68,14 @@ const ecosystem: Eco[] = [
     accent: 'var(--success)',
   },
   {
+    title: 'Key Registry contract',
+    tagline: 'Testnet Smart Contract',
+    description:
+      'The Tasra key registry deployed on the Avalanche Fuji C-Chain testnet.',
+    href: 'https://testnet.snowtrace.io/address/0x45F432aB5709e9920b5ec349D29663D7200A8C39/contract/43113/code?chainid=43113',
+    accent: 'var(--warn)',
+  },
+  {
     title: 'Tasra Docs',
     tagline: 'SDK documentation',
     description:
@@ -90,14 +98,6 @@ const ecosystem: Eco[] = [
       'Announcements, releases and updates from the Tasra team.',
     href: 'https://t.me/+eTA2Uz0TbSA2ZTI0',
     accent: '#2aabee',
-  },
-  {
-    title: 'Key Registry contract',
-    tagline: 'Testnet Smart Contract',
-    description:
-      'The Tasra key registry deployed on the Avalanche Fuji C-Chain testnet.',
-    href: 'https://testnet.snowtrace.io/address/0x45F432aB5709e9920b5ec349D29663D7200A8C39/contract/43113/code?chainid=43113',
-    accent: 'var(--warn)',
   },
 ]
 
