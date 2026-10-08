@@ -26,8 +26,8 @@ export function EncryptionPage() {
   const notice = useNotice()
   const [keys, setKeys] = useState<KeySlotOption[]>([])
   const [records, setRecords] = useState<EncryptionRecord[]>([])
-  const [title, setTitle] = useState('Private agreement')
-  const [version, setVersion] = useState('1')
+  const [title, setTitle] = useState('')
+  const [version, setVersion] = useState('')
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [selectedSlot, setSelectedSlot] = useState('')
   const [busy, setBusy] = useState(false)
@@ -166,6 +166,7 @@ export function EncryptionPage() {
                   type="text"
                   value={title}
                   maxLength={120}
+                  placeholder="e.g. Private agreement"
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
@@ -176,6 +177,7 @@ export function EncryptionPage() {
                   type="number"
                   value={version}
                   min={1}
+                  placeholder="e.g. 1"
                   onChange={(e) => setVersion(e.target.value)}
                 />
               </div>
@@ -210,7 +212,11 @@ export function EncryptionPage() {
               Encryption binds the document to a scoped identity under the issuer. The
               plaintext never leaves the browser except for the encrypted ciphertext.
             </p>
-            <button className="primary" disabled={busy} onClick={encrypt}>
+            <button
+              className="primary"
+              disabled={busy || !title.trim() || !version.trim() || !pdf}
+              onClick={encrypt}
+            >
               Encrypt document
             </button>
           </section>

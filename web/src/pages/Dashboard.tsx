@@ -11,8 +11,8 @@ export function Dashboard() {
   const notice = useNotice()
   const [list, setList] = useState<PublicRequest[]>([])
   const [selected, setSelected] = useState<PublicRequest>()
-  const [title, setTitle] = useState('Consulting agreement')
-  const [version, setVersion] = useState('1')
+  const [title, setTitle] = useState('')
+  const [version, setVersion] = useState('')
   const [pdf, setPdf] = useState<PdfFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
@@ -119,6 +119,7 @@ export function Dashboard() {
                   type="text"
                   value={title}
                   maxLength={120}
+                  placeholder="e.g. Consulting agreement"
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
@@ -129,6 +130,7 @@ export function Dashboard() {
                   type="number"
                   value={version}
                   min={1}
+                  placeholder="e.g. 1"
                   onChange={(e) => setVersion(e.target.value)}
                 />
               </div>
@@ -171,7 +173,17 @@ export function Dashboard() {
             <p className="hint">
               Sending freezes the PDF, version and the selected signers.
             </p>
-            <button className="primary" disabled={busy} onClick={send}>
+            <button
+              className="primary"
+              disabled={
+                busy ||
+                !title.trim() ||
+                !version.trim() ||
+                !pdf ||
+                selectedSlots.length === 0
+              }
+              onClick={send}
+            >
               Create signing request
             </button>
           </section>

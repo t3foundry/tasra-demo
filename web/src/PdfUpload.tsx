@@ -1,8 +1,16 @@
+import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
+
 export type PdfFile = { name: string; bytes: Uint8Array }
+
+const MAX_BYTES = 8 * 1024 * 1024
 
 function sizeLabel(bytes: number): string {
   const kb = bytes / 1024
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`
+}
+
+function isPdf(f: File): boolean {
+  return f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
 }
 
 export function PdfUpload({
@@ -16,10 +24,27 @@ export function PdfUpload({
   sampleUrl?: string
   sampleLabel?: string
 }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+  const [error, setError] = useState('')
+
+  async function read(f: File) {
+    if (!isPdf(f)) {
+      setError('Only PDF files are accepted.')
+      return
+    }
+    if (f.size > MAX_BYTES) {
+      setError('That file is larger than 8 MB.')
+      return
+    }
+    setError('')
+    onChange({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })
+  }
+
   async function pick(target: HTMLInputElement) {
     const f = target.files?.[0]
     if (!f) return
-    onChange({ name: f.name, bytes: new Uint8Array(await f.arrayBuffer()) })
+    await read(f)
     target.value = ''
   }
 
@@ -27,6 +52,20 @@ export function PdfUpload({
     if (!sampleUrl) return
     const res = await fetch(sampleUrl)
     onChange({ name: 'sample.pdf', bytes: new Uint8Array(await res.arrayBuffer()) })
+  }
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragging(false)
+    const f = e.dataTransfer.files?.[0]
+    if (f) void read(f)
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      inputRef.current?.click()
+    }
   }
 
   if (file) {
@@ -62,20 +101,52 @@ export function PdfUpload({
   }
 
   return (
-    <div className="drop">
-      <p>Choose your PDF · up to 8 MB</p>
+    <div
+      className={'drop' + (dragging ? ' dragging' : '')}
+      role="button"
+      tabIndex={0}
+      onClick={() => inputRef.current?.click()}
+      onKeyDown={onKeyDown}
+      onDragOver={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault()
+        setDragging(true)
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault()
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null))
+          setDragging(false)
+      }}
+      onDrop={onDrop}
+    >
+      <p>Drag &amp; drop your PDF here</p>
       <input
+        ref={inputRef}
         type="file"
         accept="application/pdf"
+        className="hidden"
         onChange={(e) => void pick(e.currentTarget)}
+        onClick={(e) => e.stopPropagation()}
       />
+      <p className="hint">Up to 8 MB · or click to browse for a file.</p>
+      {error ? <p className="hint upload-error">{error}</p> : null}
       {sampleUrl ? (
-        <p className="hint">Or start with the included sample agreement.</p>
-      ) : null}
-      {sampleUrl ? (
-        <button type="button" className="small" onClick={() => void useSample()}>
-          {sampleLabel}
-        </button>
+        <>
+          <p className="hint">Or start with the included sample agreement.</p>
+          <button
+            type="button"
+            className="small"
+            onClick={(e) => {
+              e.stopPropagation()
+              void useSample()
+            }}
+          >
+            {sampleLabel}
+          </button>
+        </>
       ) : null}
     </div>
   )

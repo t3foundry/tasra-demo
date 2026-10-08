@@ -446,6 +446,9 @@ input[type='checkbox'] {
   display: block;
   max-width: 260px;
 }
+.drop .upload-error {
+  color: var(--danger);
+}
 .pdf-chosen {
   display: flex;
   align-items: center;

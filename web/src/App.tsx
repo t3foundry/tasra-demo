@@ -25,7 +25,7 @@ function Header() {
         <a className="brand" href="/">
           <img className="brand-logo" src="/tasra-logo.png" alt="" />
           <span className="brand-name">Tasra Demo</span>
-          <span className="label"><a target="_blank" href="https://vault.t3-foundry.fuji.tasra.network/wallet/#/">Best used with the demo wallet</a></span>
+          <span className="label">LOCAL DEMO</span>
         </a>
         {signing ? (
           <nav aria-label="Main">
