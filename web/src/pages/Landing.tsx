@@ -73,7 +73,7 @@ const ecosystem: Eco[] = [
     description:
       'Guides, API reference and tutorials for building with the Tasra SDK.',
     href: 'https://docs.tasra.network',
-    accent: 'var(--gold)',
+    accent: 'var(--purple)',
   },
   {
     title: 'GitHub',
@@ -81,7 +81,7 @@ const ecosystem: Eco[] = [
     description:
       'The t3foundry organisation — SDKs, tooling and example apps.',
     href: 'https://github.com/t3foundry',
-    accent: 'var(--purple)',
+    accent: 'var(--gold)',
   },
   {
     title: 'Telegram',
@@ -161,9 +161,7 @@ export function Landing() {
       <div className="landing-section">
         <div className="landing-section-head">
           <h2>Demo apps</h2>
-          <span className="landing-section-note">
-            Run locally · Fuji C-Chain
-          </span>
+          <span className="landing-section-note">Fuji C-Chain</span>
         </div>
         <div className="app-grid">
           {demoApps.map((app) => (

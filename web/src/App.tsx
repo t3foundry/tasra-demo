@@ -23,7 +23,6 @@ function Header() {
         <a className="brand" href="/">
           <img className="brand-logo" src="/tasra-logo.png" alt="" />
           <span className="brand-name">Tasra Network Demo</span>
-          <span className="label">LOCAL DEMO</span>
         </a>
         {signing ? (
           <nav aria-label="Main">
