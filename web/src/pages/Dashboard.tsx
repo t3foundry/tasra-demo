@@ -220,8 +220,16 @@ export function Dashboard() {
                     <span className={'status-pill ' + r.status}>
                       {requestStatus[r.status]}
                     </span>
+                    {r.status === 'completed' ? (
+                      <a
+                        className="button small"
+                        href={`/api/requests/${r.manifest.requestId}/bundle.zip`}
+                      >
+                        Download Bundle
+                      </a>
+                    ) : null}
                     <button className="small" onClick={() => setSelected(r)}>
-                      Review
+                      {r.status === 'completed' ? 'View' : 'Review'}
                     </button>
                   </div>
                 </div>

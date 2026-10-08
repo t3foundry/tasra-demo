@@ -4,36 +4,53 @@ import { FileUpload, type UploadedFile } from '../FileUpload'
 
 type SlotLink = { name?: string; slotId: string }
 
+type VerifyResult = { title?: string; version?: number; signers?: SlotLink[] }
+
 const explorer = (slotId: string) =>
   `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
 
 const cap = (s: string) => s[0]!.toUpperCase() + s.slice(1)
+
+function signerName(s: SlotLink): string {
+  return s.name ? cap(s.name) : s.slotId.slice(0, 12) + '…'
+}
+
+function listNames(signers: SlotLink[]): string {
+  const names = signers.map(signerName)
+  if (names.length === 0) return 'A signer'
+  if (names.length === 1) return names[0]
+  return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]
+}
 
 export function VerifyPage() {
   const [status, setStatus] = useState('')
   const [className, setClassName] = useState('')
   const [slots, setSlots] = useState<SlotLink[]>([])
   const [bundle, setBundle] = useState<UploadedFile | null>(null)
-
-  function success() {
-    setClassName('success')
-    setStatus('Verified. Alice and Bob signed this exact document and request.')
-  }
+  const [locked, setLocked] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   async function verifyBundleZip() {
+    if (!bundle || busy) return
+    setBusy(true)
+    setLocked(true)
     setStatus('Checking…')
     setClassName('')
     setSlots([])
     try {
-      if (!bundle) throw new Error('Select the downloaded bundle (.zip)')
-      const result = await api<{ signers?: SlotLink[] }>('/verify-zip', {
+      const result = await api<VerifyResult>('/verify-zip', {
         zipBase64: base64(bundle.bytes),
       })
-      setSlots(result.signers ?? [])
-      success()
+      const signers = result.signers ?? []
+      setSlots(signers)
+      const doc = result.title ? `“${result.title}”` : 'the document'
+      setClassName('success')
+      setStatus(`Verified. ${listNames(signers)} signed ${doc}.`)
     } catch (e) {
       setClassName('error')
       setStatus(e instanceof Error ? e.message : 'Verification failed')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -58,13 +75,14 @@ export function VerifyPage() {
           extensions={['zip']}
           label="Drag & drop your bundle here"
           typeLabel="ZIP"
+          disabled={locked}
         />
         <button
           className="primary"
-          disabled={!bundle}
-          onClick={verifyBundleZip}
+          disabled={!bundle || busy}
+          onClick={() => void verifyBundleZip()}
         >
-          Verify downloaded bundle
+          {busy ? 'Verifying…' : 'Verify downloaded bundle'}
         </button>
         <p id="result" role="status" className={className}>
           {status}
@@ -80,7 +98,7 @@ export function VerifyPage() {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {s.name ? cap(s.name) : s.slotId.slice(0, 12) + '…'}
+                  {signerName(s)}
                 </a>
               </span>
             ))}

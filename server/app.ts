@@ -768,6 +768,8 @@ export function createApp() {
     return c.json({
       verified: true,
       policy: 'Current anchored signer keys; not an archival timestamp',
+      title: expected.title,
+      version: expected.version,
       signers: expected.signers,
     })
   })

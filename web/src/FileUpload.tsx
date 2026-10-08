@@ -25,6 +25,7 @@ export function FileUpload({
   sampleUrl,
   sampleLabel = 'Use sample file',
   sampleHint = 'Or start with an included sample.',
+  disabled = false,
 }: {
   file: UploadedFile | null
   onChange: (file: UploadedFile | null) => void
@@ -36,6 +37,7 @@ export function FileUpload({
   sampleUrl?: string
   sampleLabel?: string
   sampleHint?: string
+  disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -89,7 +91,7 @@ export function FileUpload({
 
   if (file) {
     return (
-      <div className="pdf-chosen" role="status">
+      <div className={'pdf-chosen' + (disabled ? ' disabled' : '')} role="status">
         <span className="pdf-chosen-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
             <circle className="pdf-check-bg" cx="12" cy="12" r="11" />
@@ -108,15 +110,17 @@ export function FileUpload({
             {sizeLabel(file.bytes.length)} · {typeLabel} attached
           </small>
         </div>
-        <button
-          type="button"
-          className="pdf-remove"
-          aria-label={`Remove ${file.name}`}
-          title="Remove"
-          onClick={() => onChange(null)}
-        >
-          ×
-        </button>
+        {disabled ? null : (
+          <button
+            type="button"
+            className="pdf-remove"
+            aria-label={`Remove ${file.name}`}
+            title="Remove"
+            onClick={() => onChange(null)}
+          >
+            ×
+          </button>
+        )}
       </div>
     )
   }

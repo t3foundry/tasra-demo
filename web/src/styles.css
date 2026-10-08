@@ -479,6 +479,10 @@ input[type='checkbox'] {
   border-radius: 4px;
   padding: 14px 16px;
 }
+.pdf-chosen.disabled {
+  opacity: 0.55;
+  filter: grayscale(0.4);
+}
 .pdf-chosen-icon {
   flex: 0 0 auto;
   display: grid;
