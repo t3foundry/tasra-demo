@@ -800,38 +800,168 @@ header :focus-visible {
 .hidden {
   display: none !important;
 }
-.landing-grid {
+.landing-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 46px 44px 48px;
+  border-radius: 8px;
+  color: var(--brand-deep);
+  background-color: #eaf2f6;
+  background-image:
+    linear-gradient(
+      115deg,
+      rgba(255, 255, 255, 0.86) 0%,
+      rgba(233, 242, 247, 0.5) 52%,
+      rgba(209, 231, 238, 0.28) 100%
+    ),
+    url('/tasra-hero.jpg');
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 18px 50px rgba(13, 44, 89, 0.2);
+}
+.landing-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(13, 44, 89, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 44, 89, 0.04) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, #000 40%, transparent);
+}
+.landing-hero-eyebrow {
+  color: rgba(13, 44, 89, 0.68);
+  letter-spacing: 2px;
+}
+.landing-hero-title {
+  color: var(--brand-deep);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -1.8px;
+  line-height: 1.06;
+  margin: 14px 0 16px;
+  max-width: 640px;
+}
+.landing-hero-sub {
+  color: rgba(19, 58, 118, 0.82);
+  font-size: 16px;
+  line-height: 1.6;
+  max-width: 620px;
+  margin: 0;
+}
+
+.landing-section {
+  margin-top: 44px;
+}
+.landing-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.landing-section-head h2 {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.landing-section-note {
+  font: 11px ui-monospace, monospace;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.app-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 26px;
   align-items: stretch;
 }
-.landing-card {
+.app-card {
   display: flex;
   flex-direction: column;
-  border-top: 4px solid var(--lime);
+  border-top: 4px solid var(--card-accent, var(--brand));
 }
-.landing-card:nth-child(2) {
-  border-top-color: var(--gold);
-}
-.landing-card h2 {
+.app-card h2 {
   font-size: 24px;
   letter-spacing: -0.5px;
   margin-top: 10px;
 }
-.landing-card .sub {
+.app-card .sub {
   flex: 1;
 }
-.landing-card .button {
+.app-card .button {
   align-self: flex-start;
   margin-top: 6px;
 }
-.landing-points {
+.app-points {
   margin: 0 0 20px;
   padding-left: 18px;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.7;
+}
+
+.eco-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.eco-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--card-accent, var(--brand));
+  border-radius: 4px;
+  padding: 22px;
+  text-decoration: none;
+  color: var(--ink);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.eco-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.1);
+}
+.eco-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.eco-tagline {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.eco-arrow {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--brand-deep);
+  transition: transform 0.15s ease;
+}
+.eco-card:hover .eco-arrow {
+  transform: translate(2px, -2px);
+}
+.eco-card h3 {
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.eco-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted);
 }
 input[type='radio'] {
   accent-color: var(--brand-deep);
@@ -907,7 +1037,14 @@ input[type='radio'] {
   border-top: 1px solid var(--line);
 }
 @media (max-width: 850px) {
-  .landing-grid {
+  .landing-hero {
+    padding: 32px 24px 34px;
+  }
+  .landing-hero-title {
+    font-size: 32px;
+  }
+  .app-grid,
+  .eco-grid {
     grid-template-columns: 1fr;
   }
 }

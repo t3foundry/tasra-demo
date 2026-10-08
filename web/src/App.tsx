@@ -22,7 +22,7 @@ function Header() {
       <div className="bar">
         <a className="brand" href="/">
           <img className="brand-logo" src="/tasra-logo.png" alt="" />
-          <span className="brand-name">Tasra Demo</span>
+          <span className="brand-name">Tasra Network Demo</span>
           <span className="label">LOCAL DEMO</span>
         </a>
         {signing ? (
