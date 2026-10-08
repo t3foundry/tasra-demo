@@ -68,7 +68,9 @@ const webPublic = join(root, 'web', 'public')
  * Resolution order:
  *  1. `PUBLIC_ORIGIN` env var (explicit, canonical) — recommended for deploys.
  *  2. `X-Forwarded-Proto`/`X-Forwarded-Host` — only when `TRUST_PROXY` is set.
- *  3. The request URL — localhost/dev fallback.
+ *  3. The request URL — accepted only for loopback hosts (local dev). For a
+ *     remote host with no explicit configuration this fails closed instead of
+ *     silently advertising an `http://` issuer.
  */
 function firstForwarded(value: string | undefined): string | undefined {
   if (!value) return undefined
@@ -79,16 +81,23 @@ function firstForwarded(value: string | undefined): string | undefined {
   return undefined
 }
 
+/** Hosts where a plain `http://` issuer is legitimate (local development). */
+function isLoopbackHost(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]' ||
+    hostname === '::1' ||
+    hostname === '0.0.0.0'
+  )
+}
+
 function publicOrigin(c: Context): string {
   const configured = process.env.PUBLIC_ORIGIN
   if (configured) {
     const url = new URL(configured)
     // Fail closed: a public deployment must advertise itself over https.
-    if (
-      url.protocol !== 'https:' &&
-      url.hostname !== 'localhost' &&
-      url.hostname !== '127.0.0.1'
-    ) {
+    if (url.protocol !== 'https:' && !isLoopbackHost(url.hostname)) {
       throw new Error('PUBLIC_ORIGIN must be an https:// origin when publicly reachable')
     }
     return url.origin
@@ -100,7 +109,17 @@ function publicOrigin(c: Context): string {
     if (proto && host) return `${proto}://${host}`
   }
 
-  return new URL(c.req.url).origin
+  const url = new URL(c.req.url)
+  // Fail closed on the fallback too: without PUBLIC_ORIGIN or TRUST_PROXY we can
+  // only infer the scheme from the socket, which is `http` behind a TLS proxy.
+  // Advertising `http://` to a browser wallet is guaranteed mixed content, so
+  // refuse for any non-loopback host rather than emit a broken offer.
+  if (url.protocol === 'http:' && !isLoopbackHost(url.hostname)) {
+    throw new Error(
+      'Cannot determine a public https:// origin for this host; set PUBLIC_ORIGIN (or TRUST_PROXY=1) and redeploy',
+    )
+  }
+  return url.origin
 }
 
 function lookup(...paths: string[]) {
