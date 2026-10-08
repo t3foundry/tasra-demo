@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { DemoWalletLink } from '../DemoWalletLink'
 
 function Section({
   eyebrow,
@@ -60,6 +61,20 @@ export function Landing() {
             'Download the ciphertext bundle for later opening',
           ]}
         />
+      </div>
+
+      <div className="landing-wallet">
+        <div>
+          <h2>Use the demo wallet to configure access control.</h2>
+          <p>
+            Signatures and decryption are gated by credentials. Open the Tasra demo
+            wallet to issue, hold and present the verifiable credentials that authorize
+            every action in this demo.
+          </p>
+        </div>
+        <DemoWalletLink className="landing-wallet-cta">
+          Open the demo wallet
+        </DemoWalletLink>
       </div>
     </>
   )

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { NoticeProvider } from './notice'
 import { SenderProvider } from './sender'
+import { DemoWalletLink } from './DemoWalletLink'
 import { Landing } from './pages/Landing'
 import { Dashboard } from './pages/Dashboard'
 import { SignerPage } from './pages/SignerPage'
@@ -17,6 +18,7 @@ function Header() {
     pathname === '/verify' ||
     pathname.startsWith('/sign/')
   const encrypting = pathname === '/encryption' || pathname === '/decryption'
+  const isLanding = pathname === '/'
   return (
     <header>
       <div className="bar">
@@ -37,6 +39,14 @@ function Header() {
             <Link to="/encryption">Encryption</Link>
             <Link to="/decryption">Decryption</Link>
           </nav>
+        ) : null}
+        {!isLanding ? (
+          <DemoWalletLink className="demo-wallet-header">
+            Demo wallet
+            <span className="demo-wallet-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </DemoWalletLink>
         ) : null}
       </div>
     </header>
@@ -70,9 +80,9 @@ function Main() {
   )
 }
 
-export default function App() {
+function Layout() {
   return (
-    <BrowserRouter>
+    <>
       <div className="watermark" aria-hidden="true" />
       <SenderProvider>
         <NoticeProvider>
@@ -84,6 +94,14 @@ export default function App() {
           </footer>
         </NoticeProvider>
       </SenderProvider>
+    </>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Layout />
     </BrowserRouter>
   )
 }
