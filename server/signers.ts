@@ -1,37 +1,13 @@
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { hexToBytes } from 'tasra-sdk'
-import { issueSdJwtVc, holderCnf, jwkFromDid, ed25519FromDidKey, type Jwk } from 'tasra-sdk/oid4vp'
+import { issueSdJwtVc, ed25519FromDidKey, type Jwk } from 'tasra-sdk/oid4vp'
 import { createFileStore } from 'tasra-sdk/app/node'
 import { bondingCurveAbi, createTasraWriteClient } from 'tasra-sdk/chain'
 import { tasra } from './config'
-import { stateDirectory, atomicSave } from './store'
+import { stateDirectory } from './store'
 import { loadService } from './backend'
 import type { Hex } from '../shared/model'
-
-export type SignerRecord = { name: string; slotId: Hex; holderKey?: Jwk }
-export type KeySlotOption = { slotId: Hex; name?: string }
-
-const signersFile = join(stateDirectory, 'signers.json')
-const encryptionKeysFile = join(stateDirectory, 'encryption-keys.json')
-
-export type NamedKey = { name: string; slotId: Hex }
-
-export function listEncryptionKeys(): NamedKey[] {
-  if (!existsSync(encryptionKeysFile)) return []
-  const data = JSON.parse(readFileSync(encryptionKeysFile, 'utf8')) as {
-    schema: string
-    keys: NamedKey[]
-  }
-  return data.schema === 'tasra-encryption-keys/v1' ? data.keys : []
-}
-
-export function addEncryptionKey(record: NamedKey): NamedKey[] {
-  const keys = listEncryptionKeys().filter((k) => k.name !== record.name)
-  const next = [...keys, record]
-  atomicSave(encryptionKeysFile, { schema: 'tasra-encryption-keys/v1', keys: next })
-  return next
-}
 
 // Funding budget in integer base units: EURC has 6 decimals; TSRA has 18.
 const slotCredit = 1n * 10n ** 18n // deposit 1 TSRA into each slot
@@ -45,82 +21,6 @@ export function readIssuerSeed(): Hex {
   if (state.schema !== 'tasra-document-setup/v2' || !state.issuerSeed)
     throw new Error('Issuer state unavailable; run the tutorial setup first')
   return state.issuerSeed
-}
-
-export function listSigners(): SignerRecord[] {
-  if (existsSync(signersFile)) {
-    const data = JSON.parse(readFileSync(signersFile, 'utf8')) as {
-      signers: SignerRecord[]
-    }
-    return data.signers
-  }
-  const service = loadService()
-  const signers = Object.entries(service.slots).map(([name, slotId]) => ({
-    name,
-    slotId,
-    holderKey: service.holderKeys[name as keyof typeof service.holderKeys],
-  }))
-  atomicSave(signersFile, { schema: 'tasra-signers/v1', signers })
-  return signers
-}
-
-export function hasSigner(name: string): boolean {
-  return listSigners().some((s) => s.name === name)
-}
-
-function explorerUrl(): string {
-  const manifest = JSON.parse(
-    readFileSync(join(import.meta.dirname, 'network.json'), 'utf8'),
-  ) as { services?: Array<{ kind: string; url: string }> }
-  return (
-    manifest.services?.find((s) => s.kind === 'explorer')?.url ??
-    'https://explorer.t3-foundry.fuji.tasra.network'
-  )
-}
-
-/** List only the named slots of the requested mode still present on-chain. */
-export async function listKeySlots(mode: 'frost' | 'bls' = 'frost'): Promise<KeySlotOption[]> {
-  const response = await fetch(explorerUrl() + '/api/slots', {
-    signal: AbortSignal.timeout(15000),
-  })
-  if (!response.ok) throw new Error('Unable to list key slots from the registry')
-  const data = (await response.json()) as {
-    slots?: Array<{ slotId: string; mode: string; exists: boolean; cancelled: boolean }>
-  }
-  const slots = (data.slots ?? []).filter(
-    (s) => s.mode === mode && s.exists && !s.cancelled,
-  )
-  const existing = new Set(slots.map((s) => s.slotId.toLowerCase()))
-  const named = mode === 'frost' ? listSigners() : listEncryptionKeys()
-  return named
-    .filter((s) => existing.has(s.slotId.toLowerCase()))
-    .map((s) => ({ slotId: s.slotId, name: s.name }))
-}
-
-export function addSigner(record: SignerRecord): SignerRecord[] {
-  const signers = listSigners()
-  if (signers.some((s) => s.name === record.name))
-    throw new Error('A signer with this name already exists')
-  const next = [...signers, record]
-  atomicSave(signersFile, { schema: 'tasra-signers/v1', signers: next })
-  return next
-}
-
-/** Issue a DocumentSigner credential bound to a browser-generated holder DID. */
-export function issueSignerCredential(name: string, holderDid: string): string {
-  const issuer = tasra.identities.create({ seed: hexToBytes(readIssuerSeed()) })
-  try {
-    return issueSdJwtVc({
-      issuer: issuer.issuer,
-      vct: 'DocumentSigner',
-      sub: 'did:demo:' + name,
-      cnf: holderCnf({ did: holderDid }),
-      claims: { role: 'document-signer' },
-      ttlSecs: 86400,
-    })
-  } finally {
-    issuer.destroy()
-  }
 }
 
 /** Issue a DocumentSigner credential bound to a remote W3C did:key (Ed25519) holder. */

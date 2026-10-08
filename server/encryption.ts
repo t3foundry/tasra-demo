@@ -1,4 +1,3 @@
-import { mkdirSync, readdirSync, readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { hexToBytes, type IbeCiphertext } from 'tasra-sdk'
 import {
@@ -8,45 +7,11 @@ import {
 } from 'tasra-sdk/oid4vp'
 import { createFileStore } from 'tasra-sdk/app/node'
 import { deployment, tasra, verifierAgentUrl } from './config'
-import { stateDirectory, atomicSave } from './store'
+import { stateDirectory } from './store'
 import { loadService } from './backend'
-import { readIssuerSeed, fundNewSlot, slotProgressMessage, addEncryptionKey } from './signers'
+import { readIssuerSeed, fundNewSlot, slotProgressMessage } from './signers'
 import { toHex, type Hex } from '../shared/model'
-import type { EncryptionRecord, EncryptionCiphertext } from '../shared/encrypt'
-
-const directory = join(stateDirectory, 'encryption')
-
-function ensureDirectory() {
-  mkdirSync(directory, { recursive: true, mode: 0o700 })
-}
-
-function file(id: string) {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Invalid encryption record ID')
-  return join(directory, id + '.json')
-}
-
-export function saveEncryptionRecord(record: EncryptionRecord) {
-  ensureDirectory()
-  atomicSave(file(record.manifest.recordId), record)
-}
-
-export function getEncryptionRecord(id: string): EncryptionRecord {
-  return JSON.parse(
-    (() => {
-      const p = file(id)
-      if (!existsSync(p)) throw new Error('Unknown encryption record')
-      return readFileSync(p, 'utf8')
-    })(),
-  ) as EncryptionRecord
-}
-
-export function listEncryptionRecords(): EncryptionRecord[] {
-  ensureDirectory()
-  return readdirSync(directory)
-    .filter((n) => n.endsWith('.json'))
-    .map((n) => JSON.parse(readFileSync(join(directory, n), 'utf8')) as EncryptionRecord)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-}
+import type { EncryptionCiphertext } from '../shared/encrypt'
 
 /** Deterministic issuer DID derived from the setup seed. */
 export function encryptionIssuerDid(): string {
@@ -107,7 +72,6 @@ export async function createEncryptionSlot(
       },
     )
     await fundNewSlot(creator, slot.slotId as Hex, onProgress)
-    addEncryptionKey({ name, slotId: slot.slotId as Hex })
     return slot.slotId as Hex
   } finally {
     issuer.destroy()

@@ -4,9 +4,9 @@ import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import QRCode from 'qrcode'
 import { pollOid4vpSession } from 'tasra-sdk/verifier-agent'
-import { verifyCompactJws, jwkFromDid, parseSdJwt, sdJwtClaims, type Jwk } from 'tasra-sdk/oid4vp'
+import { verifyCompactJws, parseSdJwt, sdJwtClaims, type Jwk } from 'tasra-sdk/oid4vp'
 import { loadService, liveBackend, readKey } from './backend'
-import { deployment, verifierAgentUrl, tasra } from './config'
+import { deployment, verifierAgentUrl } from './config'
 import { createZip, readZip } from './zip'
 import { Store, stateDirectory } from './store'
 import { Workflow, publicView, Conflict, migrateRecords, type RequestRecord } from './workflow'
@@ -20,12 +20,6 @@ import {
   issueForHolder,
 } from './vci'
 import {
-  listSigners,
-  listKeySlots,
-  listEncryptionKeys,
-  hasSigner,
-  addSigner,
-  issueSignerCredential,
   issueRemoteSignerCredential,
   createSignerSlot,
 } from './signers'
@@ -41,9 +35,6 @@ import {
   encryptDocument,
   encryptionIdentity,
   encryptionIssuerDid,
-  getEncryptionRecord,
-  listEncryptionRecords,
-  saveEncryptionRecord,
   serializeCiphertext,
   openDecryptSession,
   decodeCiphertext,
@@ -174,18 +165,12 @@ export function createApp() {
       throw new Conflict('Open the private sender-console link printed by the server')
   }
 
-  const publicJson = JSON.parse(
-    readFileSync(join(stateDirectory, 'public.json'), 'utf8'),
-  ) as { issuerDid?: string }
-
   const holderKeys = new Map<string, Jwk>()
   for (const person of Object.keys(config.slots) as Person[]) {
     const slotId = config.slots[person]
     const jwk = config.holderKeys[person]
     if (slotId && jwk) holderKeys.set(slotId.toLowerCase(), jwk)
   }
-  for (const s of listSigners())
-    if (s.holderKey) holderKeys.set(s.slotId.toLowerCase(), s.holderKey)
 
   app.get('/api/config', (c) =>
     c.json({
@@ -195,79 +180,6 @@ export function createApp() {
       slots: config.slots,
     }),
   )
-
-  app.get('/api/signers', (c) =>
-    c.json(
-      listSigners().map((s) => ({
-        name: s.name,
-        slotId: s.slotId,
-        dcql: publicJson.issuerDid
-          ? JSON.parse(
-              tasra.credentials.policy({
-                issuer: publicJson.issuerDid,
-                type: 'DocumentSigner',
-                subjects: ['did:demo:' + s.name],
-                claims: { role: ['document-signer'] },
-              }),
-            )
-          : undefined,
-      })),
-    ),
-  )
-
-  app.get('/api/key-slots', async (c) => c.json(await listKeySlots()))
-
-  type SignerJob = {
-    id: string
-    name: string
-    status: 'running' | 'completed' | 'failed'
-    progress: string[]
-    result?: { name: string; slotId: Hex; credential: string }
-    error?: string
-  }
-  const signerJobs = new Map<string, SignerJob>()
-
-  app.post('/api/signers', async (c) => {
-    const b = await readBody(c)
-    const name = text(b.name).trim().toLowerCase()
-    const holderDid = text(b.holderDid)
-    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name))
-      throw new Conflict('Signer name must be lowercase letters, digits and dashes')
-    if (!/^did:jwk:[A-Za-z0-9_-]+$/.test(holderDid))
-      throw new Conflict('Holder DID must be a did:jwk identifier')
-    if (hasSigner(name))
-      throw new Conflict('A signer named "' + name + '" already exists')
-    if ([...signerJobs.values()].some((j) => j.status === 'running'))
-      throw new Conflict('A signer creation is already in progress')
-
-    const job: SignerJob = { id: randomUUID(), name, status: 'running', progress: [] }
-    signerJobs.set(job.id, job)
-    void (async () => {
-      try {
-        job.progress.push('Issuing the signer credential…')
-        const credential = issueSignerCredential(name, holderDid)
-        job.progress.push('Credential issued')
-        job.progress.push('Creating the key slot…')
-        const slotId = await createSignerSlot(name, (message) =>
-          job.progress.push(message),
-        )
-        job.progress.push('Persisting the signer…')
-        addSigner({ name, slotId, holderKey: jwkFromDid(holderDid) })
-        job.status = 'completed'
-        job.result = { name, slotId, credential }
-      } catch (e) {
-        job.status = 'failed'
-        job.error = (e as Error).message
-      }
-    })()
-    return c.json({ jobId: job.id }, 202)
-  })
-
-  app.get('/api/signers/jobs/:id', (c) => {
-    const job = signerJobs.get(c.req.param('id'))
-    if (!job) throw new Conflict('Unknown signer creation job')
-    return c.json(job)
-  })
 
   type RemoteSignerJob = {
     id: string
@@ -287,9 +199,7 @@ export function createApp() {
       throw new Conflict('Signer name must be lowercase letters, digits and dashes')
     if (!/^did:key:z[1-9A-HJ-NP-Za-km-z]+$/.test(holderDid))
       throw new Conflict('Holder DID must be an Ed25519 did:key identifier')
-    if (hasSigner(name))
-      throw new Conflict('A signer named "' + name + '" already exists')
-    if ([...signerJobs.values(), ...remoteSignerJobs.values()].some((j) => j.status === 'running'))
+    if ([...remoteSignerJobs.values()].some((j) => j.status === 'running'))
       throw new Conflict('A signer creation is already in progress')
 
     const job: RemoteSignerJob = {
@@ -302,14 +212,12 @@ export function createApp() {
     void (async () => {
       try {
         job.progress.push('Issuing the credential for the remote wallet…')
-        const { credential, holderKey } = issueRemoteSignerCredential(name, holderDid)
+        const { credential } = issueRemoteSignerCredential(name, holderDid)
         job.progress.push('Credential issued')
         job.progress.push('Creating the key slot…')
         const slotId = await createSignerSlot(name, (message) =>
           job.progress.push(message),
         )
-        job.progress.push('Persisting the signer…')
-        addSigner({ name, slotId, holderKey })
         job.status = 'completed'
         job.result = { name, slotId, credential, holderDid }
       } catch (e) {
@@ -336,25 +244,6 @@ export function createApp() {
     error?: string
   }
   const encryptionKeyJobs = new Map<string, EncryptionKeyJob>()
-
-  app.get('/api/encryption/keys', async (c) => {
-    const keys = await listKeySlots('bls')
-    return c.json(
-      keys.map((k) => ({
-        ...k,
-        dcql: publicJson.issuerDid
-          ? JSON.parse(
-              tasra.credentials.policy({
-                issuer: publicJson.issuerDid,
-                type: 'DocumentReader',
-                claims: k.name ? { key: [k.name] } : undefined,
-                identityScope: { claim: 'documents' },
-              }),
-            )
-          : undefined,
-      })),
-    )
-  })
 
   app.post('/api/encryption/keys', async (c) => {
     const b = await readBody(c)
@@ -390,29 +279,11 @@ export function createApp() {
 
   app.post('/api/encryption/keys/:name/issue-vc', async (c) => {
     const name = c.req.param('name')
-    if (!listEncryptionKeys().some((k) => k.name === name))
-      throw new Conflict('Unknown encryption key')
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(name))
+      throw new Conflict('Key name must be lowercase letters, digits and dashes')
     const offerUri = createOffer('DocumentReader', name, vciOrigin(c))
     const dataUrl = await QRCode.toDataURL(offerUri)
     return c.json({ offerUri, qrDataUrl: dataUrl })
-  })
-
-  app.get('/api/encryption/documents', (c) => c.json(listEncryptionRecords()))
-
-  app.get('/api/encryption/documents/:id', (c) =>
-    c.json(getEncryptionRecord(c.req.param('id'))),
-  )
-
-  app.get('/api/encryption/documents/:id/bundle', (c) => {
-    const record = getEncryptionRecord(c.req.param('id'))
-    const bundle: EncryptionBundle = {
-      manifest: record.manifest,
-      ciphertext: record.ciphertext,
-    }
-    return c.body(JSON.stringify(bundle, null, 2), 200, {
-      'content-type': 'application/json',
-      'content-disposition': 'attachment; filename="encrypted.json"',
-    })
   })
 
   app.post('/api/encryption/documents', async (c) => {
@@ -421,6 +292,7 @@ export function createApp() {
     const title = text(b.title)
     const version = Number(b.version)
     const slotId = text(b.slotId) as Hex
+    const keyName = text(b.keyName).trim().toLowerCase()
     const pdf = Buffer.from(text(b.pdfBase64), 'base64')
     if (
       !title.trim() ||
@@ -430,17 +302,12 @@ export function createApp() {
       !Number.isSafeInteger(version) ||
       version < 1 ||
       !/^0x[0-9a-f]{64}$/i.test(slotId) ||
+      !/^[a-z0-9][a-z0-9-]{0,31}$/.test(keyName) ||
       !/^[0-9a-f-]{36}$/i.test(id)
     )
       throw new Conflict(
         'Provide a PDF up to 8 MB, a title, a positive version and a BLS key slot',
       )
-    const saved = listEncryptionRecords().find((r) => r.manifest.recordId === id)
-    if (saved) return c.json(saved)
-    const keyName = listEncryptionKeys().find(
-      (k) => k.slotId.toLowerCase() === slotId.toLowerCase(),
-    )?.name
-    if (!keyName) throw new Conflict('Unknown BLS encryption key')
     const recipient = encryptionIssuerDid()
     const identity = encryptionIdentity(keyName, id, version)
     let ciphertext
@@ -466,7 +333,6 @@ export function createApp() {
       pdfSize: pdf.length,
       createdAt: new Date().toISOString(),
     }
-    saveEncryptionRecord(record)
     return c.json(record, 201)
   })
 
@@ -513,8 +379,6 @@ export function createApp() {
     )
       throw new Conflict('Upload a valid Tasra encryption bundle')
     const slotId = manifest.slotId.toLowerCase() as Hex
-    if (!listEncryptionKeys().some((k) => k.slotId.toLowerCase() === slotId))
-      throw new Conflict('Unknown BLS encryption key')
     const session = await openDecryptSession(
       slotId,
       manifest.identity,
@@ -621,8 +485,6 @@ export function createApp() {
 
   app.post('/api/signers/:name/issue-vc', async (c) => {
     const name = c.req.param('name')
-    if (!listSigners().some((s) => s.name === name))
-      throw new Conflict('Unknown signer')
     const offerUri = createOffer('DocumentSigner', name, vciOrigin(c))
     const dataUrl = await QRCode.toDataURL(offerUri)
     return c.json({ offerUri, qrDataUrl: dataUrl })

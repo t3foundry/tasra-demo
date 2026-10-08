@@ -5,6 +5,7 @@ import { digest, type PublicRequest } from '../../../shared/model'
 import { useNotice } from '../notice'
 import { Badge, Recipients, Timeline, Downloads, name, shortSlot } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
+import { listLocalSigners } from '../localSigners'
 
 type KeySlotOption = { slotId: string; name?: string }
 
@@ -40,10 +41,8 @@ export function Dashboard() {
   }, [load, notice])
 
   useEffect(() => {
-    void api<KeySlotOption[]>('/key-slots')
-      .then(setAllSlots)
-      .catch((e) => notice(e.message))
-  }, [notice])
+    setAllSlots(listLocalSigners().map((s) => ({ slotId: s.slotId, name: s.name })))
+  }, [])
 
   function toggle(slotId: string) {
     setSelectedSlots((prev) =>

@@ -5,8 +5,15 @@ import type { EncryptionRecord } from '../../../shared/encrypt'
 import { useNotice } from '../notice'
 import { shortSlot } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
-
-type KeySlotOption = { slotId: string; name?: string; dcql?: unknown }
+import {
+  listLocalEncryptionKeys,
+  saveLocalEncryptionKey,
+  type LocalEncryptionKey,
+} from '../localEncryptionKeys'
+import {
+  listLocalEncryptionRecords,
+  saveLocalEncryptionRecord,
+} from '../localEncryptionDocuments'
 
 type IssueVcResult = { offerUri: string; qrDataUrl: string }
 
@@ -22,9 +29,21 @@ type EncryptionKeyJob = {
 const explorer = (slotId: string) =>
   `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
 
+function downloadBundle(record: EncryptionRecord) {
+  const bundle = { manifest: record.manifest, ciphertext: record.ciphertext }
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }),
+  )
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = 'encrypted.json'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 export function EncryptionPage() {
   const notice = useNotice()
-  const [keys, setKeys] = useState<KeySlotOption[]>([])
+  const [keys, setKeys] = useState<LocalEncryptionKey[]>([])
   const [records, setRecords] = useState<EncryptionRecord[]>([])
   const [title, setTitle] = useState('')
   const [version, setVersion] = useState('')
@@ -38,18 +57,15 @@ export function EncryptionPage() {
   } | null>(null)
   const [vcOffer, setVcOffer] = useState<{ name: string; offer: IssueVcResult } | null>(null)
   const [issuingVc, setIssuingVc] = useState<string | null>(null)
+  const [copiedVc, setCopiedVc] = useState(false)
 
   const loadKeys = useCallback(() => {
-    void api<KeySlotOption[]>('/encryption/keys')
-      .then(setKeys)
-      .catch((e) => notice(e.message))
-  }, [notice])
+    setKeys(listLocalEncryptionKeys())
+  }, [])
 
   const loadRecords = useCallback(() => {
-    void api<EncryptionRecord[]>('/encryption/documents')
-      .then(setRecords)
-      .catch((e) => notice(e.message))
-  }, [notice])
+    setRecords(listLocalEncryptionRecords())
+  }, [])
 
   useEffect(() => {
     loadKeys()
@@ -70,9 +86,13 @@ export function EncryptionPage() {
       for (let i = 0; i < 1200; i++) {
         const job = await api<EncryptionKeyJob>('/encryption/keys/jobs/' + jobId)
         if (job.status === 'completed') {
+          saveLocalEncryptionKey({
+            name: job.result!.name,
+            slotId: job.result!.slotId,
+          })
           setCreating(null)
           setCreateName('')
-          setKeys((prev) => [...prev, { slotId: job.result!.slotId, name: job.result!.name }])
+          setKeys(listLocalEncryptionKeys())
           notice('BLS encryption key created')
           return
         }
@@ -104,12 +124,24 @@ export function EncryptionPage() {
     }
   }
 
+  async function copyVc() {
+    if (!vcOffer) return
+    try {
+      await navigator.clipboard.writeText(vcOffer.offer.offerUri)
+      setCopiedVc(true)
+      setTimeout(() => setCopiedVc(false), 1500)
+    } catch (e) {
+      notice((e as Error).message)
+    }
+  }
+
   async function encrypt() {
     setBusy(true)
     try {
       const upload = pdf?.bytes
       if (!upload) throw new Error('Choose a PDF first')
-      if (!selectedSlot) throw new Error('Select a BLS encryption key')
+      const key = keys.find((k) => k.slotId === selectedSlot)
+      if (!key) throw new Error('Select a BLS encryption key')
       const fingerprint = JSON.stringify({
         hash: await digest(upload),
         title,
@@ -130,11 +162,13 @@ export function EncryptionPage() {
         title,
         version: Number(version),
         slotId: selectedSlot,
+        keyName: key.name,
         pdfBase64: base64(upload),
       })
       sessionStorage.removeItem('pending-encrypt')
+      saveLocalEncryptionRecord(created)
+      loadRecords()
       notice('Document encrypted. Download the bundle to save the ciphertext.')
-      await loadRecords()
     } catch (e) {
       notice((e as Error).message)
     } finally {
@@ -206,16 +240,14 @@ export function EncryptionPage() {
                         onChange={() => setSelectedSlot(k.slotId)}
                       />
                       <span>
-                        {k.name ?? shortSlot(k.slotId)}
-                        {k.name ? (
-                          <small className="muted"> {shortSlot(k.slotId)}</small>
-                        ) : null}
+                        {k.name}
+                        <small className="muted"> {shortSlot(k.slotId)}</small>
                       </span>
                     </label>
                   ))}
                 </div>
               ) : (
-                <p className="hint">Loading BLS key slots from the registry…</p>
+                <p className="hint">No BLS keys stored in this browser.</p>
               )}
             </div>
             <p className="hint">
@@ -244,12 +276,12 @@ export function EncryptionPage() {
                     </small>
                   </div>
                   <div className="actions">
-                    <a
+                    <button
                       className="button small"
-                      href={`/api/encryption/documents/${r.manifest.recordId}/bundle`}
+                      onClick={() => downloadBundle(r)}
                     >
                       Download ciphertext
-                    </a>
+                    </button>
                   </div>
                 </div>
               ))
@@ -264,7 +296,8 @@ export function EncryptionPage() {
             <h2>BLS encryption keys</h2>
             <p className="hint">
               Each key is a 2-of-3 BLS slot gated by a DocumentReader credential scope.
-              Creating a key funds it with TSRA from the creator wallet.
+              Creating a key funds it with TSRA from the creator wallet. Keys are stored
+              in this browser and never written to the server.
             </p>
             <form
               onSubmit={(e) => {
@@ -296,7 +329,7 @@ export function EncryptionPage() {
                 <Fragment key={k.slotId}>
                   <div className="request">
                     <div>
-                    <strong>{k.name ?? 'Unnamed key'}</strong>
+                    <strong>{k.name}</strong>
                     <small>
                       <a
                         href={explorer(k.slotId)}
@@ -306,24 +339,16 @@ export function EncryptionPage() {
                         {shortSlot(k.slotId)} ↗
                       </a>
                     </small>
-                    {k.dcql ? (
-                      <details className="dcql">
-                        <summary>Configured DCQL</summary>
-                        <pre className="code">{JSON.stringify(k.dcql, null, 2)}</pre>
-                      </details>
-                    ) : null}
                   </div>
-                  {k.name ? (
-                    <button
-                      className="small"
-                      disabled={issuingVc !== null}
-                      onClick={() => void issueVc(k.name!)}
-                    >
-                      {issuingVc === k.name ? 'Creating QR…' : 'Issue VC'}
-                    </button>
-                  ) : null}
+                  <button
+                    className="small"
+                    disabled={issuingVc !== null}
+                    onClick={() => void issueVc(k.name)}
+                  >
+                    {issuingVc === k.name ? 'Creating QR…' : 'Issue VC'}
+                  </button>
                 </div>
-                {k.name && vcOffer && vcOffer.name === k.name ? (
+                {vcOffer && vcOffer.name === k.name ? (
                   <div className="vc-offer">
                     <img
                       src={vcOffer.offer.qrDataUrl}
@@ -338,12 +363,19 @@ export function EncryptionPage() {
                     <div className="linkbox">
                       <small>{vcOffer.offer.offerUri}</small>
                     </div>
+                    <button
+                      className="small"
+                      type="button"
+                      onClick={() => void copyVc()}
+                    >
+                      {copiedVc ? 'Copied' : 'Copy URL'}
+                    </button>
                   </div>
                 ) : null}
               </Fragment>
             ))
             ) : (
-              <p className="hint">No BLS keys found.</p>
+              <p className="hint">No BLS keys stored in this browser.</p>
             )}
           </section>
         </aside>

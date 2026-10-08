@@ -28,7 +28,7 @@ function Header() {
         {signing ? (
           <nav aria-label="Main">
             <Link to="/signing">Sign Document</Link>
-            <Link to="/signers">Signatures</Link>
+            <Link to="/signers">Signing Keys</Link>
             <Link to="/verify">Verification</Link>
           </nav>
         ) : null}
