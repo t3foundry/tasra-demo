@@ -7,6 +7,13 @@ import { PdfUpload, type PdfFile } from '../PdfUpload'
 
 type KeySlotOption = { slotId: string; name?: string }
 
+const requestStatus: Record<PublicRequest['status'], string> = {
+  awaiting: 'Pending',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  declined: 'Declined',
+}
+
 export function Dashboard() {
   const notice = useNotice()
   const [list, setList] = useState<PublicRequest[]>([])
@@ -199,9 +206,14 @@ export function Dashboard() {
                       Version {r.manifest.version} · {r.manifest.requestId.slice(0, 8)}
                     </small>
                   </div>
-                  <button className="small" onClick={() => setSelected(r)}>
-                    {r.status.replaceAll('_', ' ')}
-                  </button>
+                  <div className="request-actions">
+                    <span className={'status-pill ' + r.status}>
+                      {requestStatus[r.status]}
+                    </span>
+                    <button className="small" onClick={() => setSelected(r)}>
+                      Review
+                    </button>
+                  </div>
                 </div>
               ))
             ) : (

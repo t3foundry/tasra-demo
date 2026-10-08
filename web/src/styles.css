@@ -523,6 +523,33 @@ input[type='checkbox'] {
   display: block;
   margin-bottom: 6px;
 }
+.request-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.status-pill {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: #8a4d00;
+  background: var(--warn-soft);
+  border: 1px solid var(--warn-line);
+}
+.status-pill.completed {
+  color: #1e7a4a;
+  background: var(--success-soft);
+  border-color: var(--success-line);
+}
+.status-pill.cancelled,
+.status-pill.declined {
+  color: #c0392b;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+}
 .request small {
   color: var(--muted);
   font-size: 12px;
