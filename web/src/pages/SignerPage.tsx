@@ -10,7 +10,7 @@ import {
   type PublicSession,
 } from '../../../shared/wallet'
 import { useNotice } from '../notice'
-import { Badge, Recipients, Downloads, name, signerLabel } from '../components'
+import { Badge, Recipients, Downloads, signerLabel } from '../components'
 import { PdfPreview } from '../PdfPreview'
 
 export function SignerPage() {
@@ -23,10 +23,9 @@ export function SignerPage() {
   const [reviewedBytes, setReviewedBytes] = useState<Uint8Array>()
   const [reviewedHash, setReviewedHash] = useState('')
   const [wallet, setWallet] = useState<DemoWallet>()
-  const [autoLoaded, setAutoLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
-  const walletNameRef = useRef<HTMLParagraphElement>(null)
+  const remoteAbortRef = useRef(false)
   const [remote, setRemote] = useState<{
     qrPayload: string
     qrDataUrl: string
@@ -60,10 +59,9 @@ export function SignerPage() {
           if (stored) {
             try {
               const w = importWallet(stored)
-              if (w.name === signer.name) {
-                setWallet(w)
-                setAutoLoaded(true)
-              } else {
+if (w.name === signer.name) {
+              setWallet(w)
+            } else {
                 w.identity.destroy()
               }
             } catch {
@@ -109,19 +107,6 @@ export function SignerPage() {
     closed ||
     state.phase === 'signed' ||
     ['uncertain', 'opening', 'signing'].includes(state.phase)
-
-  async function loadWallet(f: File) {
-    setWallet(undefined)
-    setAutoLoaded(false)
-    try {
-      const w = importWallet(await f.text())
-      setWallet(w)
-      if (walletNameRef.current)
-        walletNameRef.current.textContent = 'Loaded: ' + name(w.name)
-    } catch (e) {
-      notice((e as Error).message)
-    }
-  }
 
   async function handleSign() {
     if (!wallet || !config || !r) return
@@ -189,6 +174,7 @@ export function SignerPage() {
 
   async function handleRemoteSign() {
     if (!config || !r) return
+    remoteAbortRef.current = false
     setBusy(true)
     busyRef.current = true
     setRemote(null)
@@ -212,10 +198,18 @@ export function SignerPage() {
       notice('Scan the QR with the signer’s remote wallet')
       const deadline = Date.now() + 5 * 60 * 1000
       while (true) {
+        if (remoteAbortRef.current) {
+          await api(`/requests/${id}/${slotId}/reset`, {})
+          return
+        }
         const status = await api<PublicSession>(
           `/requests/${id}/${slotId}/session`,
           { attemptId },
         )
+        if (remoteAbortRef.current) {
+          await api(`/requests/${id}/${slotId}/reset`, {})
+          return
+        }
         if (status.status === 'done') {
           setRemote(null)
           notice('Wallet approved; verifying and saving the signature…')
@@ -248,6 +242,18 @@ export function SignerPage() {
       setTimeout(() => setCopied(false), 1500)
     } catch (e) {
       notice('Could not copy: ' + (e as Error).message)
+    }
+  }
+
+  async function cancelRemote() {
+    remoteAbortRef.current = true
+    setRemote(null)
+    setCopied(false)
+    try {
+      await api(`/requests/${id}/${slotId}/reset`, {})
+      notice('Remote signature cancelled')
+    } catch (e) {
+      notice((e as Error).message)
     }
   }
 
@@ -290,31 +296,9 @@ export function SignerPage() {
               </p>
             ) : null}
             {!blocked ? (
-              <div className="wallet">
-                <label htmlFor="wallet">Your demo wallet file</label>
-                <input
-                  id="wallet"
-                  type="file"
-                  accept="application/json"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    if (f) void loadWallet(f)
-                  }}
-                />
-                <p ref={walletNameRef}>
-                  {wallet ? 'Loaded: ' + name(wallet.name) : 'Choose the private file provided to you.'}
-                </p>
-                {wallet && autoLoaded ? (
-                  <p className="hint">
-                    This wallet was loaded from your browser storage (uploaded on the
-                    Signers page), so no file selection is needed.
-                  </p>
-                ) : null}
-                <p className="hint">
-                  The wallet key stays in this browser tab. Only an encrypted credential
-                  presentation is sent.
-                </p>
-              </div>
+              <p className="signer-ready">
+                {signerLabel(state)} is ready to sign this document.
+              </p>
             ) : null}
             {!blocked ? (
               <>
@@ -353,9 +337,18 @@ export function SignerPage() {
                       signature, or copy the session URL below into it.
                     </p>
                     <div className="linkbox">{remote.qrPayload}</div>
-                    <button className="small" type="button" onClick={copyRemote}>
-                      {copied ? 'Copied' : 'Copy session URL'}
-                    </button>
+                    <div className="actions">
+                      <button className="small" type="button" onClick={copyRemote}>
+                        {copied ? 'Copied' : 'Copy session URL'}
+                      </button>
+                      <button
+                        className="small"
+                        type="button"
+                        onClick={() => void cancelRemote()}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </>

@@ -21,7 +21,7 @@ export function Badge({ status }: { status: PublicRequest['status'] }) {
     <span
       className={`badge ${status === 'completed' ? 'done' : closed ? 'closed' : ''}`}
     >
-      {status.replaceAll('_', ' ')}
+      {status === 'awaiting' ? 'Pending' : status.replaceAll('_', ' ')}
     </span>
   )
 }

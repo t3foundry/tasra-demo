@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 
-export type PdfFile = { name: string; bytes: Uint8Array }
+export type UploadedFile = { name: string; bytes: Uint8Array }
 
 const MAX_BYTES = 8 * 1024 * 1024
 
@@ -9,28 +9,46 @@ function sizeLabel(bytes: number): string {
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`
 }
 
-function isPdf(f: File): boolean {
-  return f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+function extensionOf(name: string): string {
+  const i = name.lastIndexOf('.')
+  return i < 0 ? '' : name.slice(i + 1).toLowerCase()
 }
 
-export function PdfUpload({
+export function FileUpload({
   file,
   onChange,
+  accept,
+  extensions,
+  label = 'Drag & drop your file here',
+  hint = 'Up to 8 MB · or click to browse for a file.',
+  typeLabel = 'file',
   sampleUrl,
-  sampleLabel = 'Use sample PDF',
+  sampleLabel = 'Use sample file',
+  sampleHint = 'Or start with an included sample.',
 }: {
-  file: PdfFile | null
-  onChange: (file: PdfFile | null) => void
+  file: UploadedFile | null
+  onChange: (file: UploadedFile | null) => void
+  accept?: string
+  extensions?: string[]
+  label?: string
+  hint?: string
+  typeLabel?: string
   sampleUrl?: string
   sampleLabel?: string
+  sampleHint?: string
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
   const [error, setError] = useState('')
 
+  const allowed = (extensions ?? []).map((e) => e.toLowerCase())
+  const acceptAttr = accept ?? allowed.map((e) => '.' + e).join(',')
+
   async function read(f: File) {
-    if (!isPdf(f)) {
-      setError('Only PDF files are accepted.')
+    if (allowed.length && !allowed.includes(extensionOf(f.name))) {
+      setError(
+        `Only ${allowed.map((e) => '.' + e).join(', ')} files are accepted.`,
+      )
       return
     }
     if (f.size > MAX_BYTES) {
@@ -51,7 +69,8 @@ export function PdfUpload({
   async function useSample() {
     if (!sampleUrl) return
     const res = await fetch(sampleUrl)
-    onChange({ name: 'sample.pdf', bytes: new Uint8Array(await res.arrayBuffer()) })
+    const name = sampleUrl.split('/').pop() || 'sample'
+    onChange({ name, bytes: new Uint8Array(await res.arrayBuffer()) })
   }
 
   function onDrop(e: DragEvent<HTMLDivElement>) {
@@ -85,7 +104,9 @@ export function PdfUpload({
         </span>
         <div className="pdf-chosen-info">
           <strong>{file.name}</strong>
-          <small>{sizeLabel(file.bytes.length)} · PDF attached</small>
+          <small>
+            {sizeLabel(file.bytes.length)} · {typeLabel} attached
+          </small>
         </div>
         <button
           type="button"
@@ -122,20 +143,20 @@ export function PdfUpload({
       }}
       onDrop={onDrop}
     >
-      <p>Drag &amp; drop your PDF here</p>
+      <p>{label}</p>
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf"
+        accept={acceptAttr}
         className="hidden"
         onChange={(e) => void pick(e.currentTarget)}
         onClick={(e) => e.stopPropagation()}
       />
-      <p className="hint">Up to 8 MB · or click to browse for a file.</p>
+      <p className="hint">{hint}</p>
       {error ? <p className="hint upload-error">{error}</p> : null}
       {sampleUrl ? (
         <>
-          <p className="hint">Or start with the included sample agreement.</p>
+          <p className="hint">{sampleHint}</p>
           <button
             type="button"
             className="small"

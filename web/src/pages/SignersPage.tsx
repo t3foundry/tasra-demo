@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createIdentity, verifyCredential } from 'tasra-sdk/app'
 import { ed25519DidKey } from 'tasra-sdk/oid4vp'
 import { ed25519 } from '@noble/curves/ed25519'
 import { api } from '../api'
 import { name } from '../components'
+import { DemoWalletLink } from '../DemoWalletLink'
 import { useNotice } from '../notice'
 import { toHex } from '../../../shared/model'
 import { importWallet } from '../../../shared/wallet'
@@ -37,16 +38,7 @@ const explorer = (slotId: string) =>
 const walletKey = (person: string) => `tasra-wallet:${person}`
 const walletSchema = 'tasra-demo-wallet/v1'
 
-function downloadWallet(person: string) {
-  const text = localStorage.getItem(walletKey(person))
-  if (!text) return
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = person + '.json'
-  anchor.click()
-  URL.revokeObjectURL(url)
-}
+
 
 type WalletInfo = {
   did: string
@@ -72,8 +64,6 @@ function describeWallet(text: string): WalletInfo {
 }
 
 function WalletUpload({ person }: { person: string }) {
-  const notice = useNotice()
-  const inputRef = useRef<HTMLInputElement>(null)
   const [info, setInfo] = useState<WalletInfo | null>(null)
 
   useEffect(() => {
@@ -85,29 +75,6 @@ function WalletUpload({ person }: { person: string }) {
     }
   }, [person])
 
-  async function onFile(file: File | undefined) {
-    if (!file) return
-    try {
-      const text = await file.text()
-      const wallet = importWallet(text)
-      try {
-        if (wallet.name !== person)
-          throw new Error(
-            `This wallet belongs to ${name(wallet.name)}, not ${name(person)}`,
-          )
-        localStorage.setItem(walletKey(person), text)
-        setInfo(describeWallet(text))
-        notice(`${name(person)}’s wallet stored in this browser`)
-      } finally {
-        wallet.identity.destroy()
-      }
-    } catch (e) {
-      notice((e as Error).message)
-    } finally {
-      if (inputRef.current) inputRef.current.value = ''
-    }
-  }
-
   return (
     <details className="dcql">
       <summary>
@@ -117,28 +84,11 @@ function WalletUpload({ person }: { person: string }) {
         </span>
       </summary>
       <div className="wallet">
-        <input
-          ref={inputRef}
-          type="file"
-          accept="application/json"
-          className="hidden"
-          onChange={(e) => void onFile(e.target.files?.[0])}
-        />
         <p>
           {info
             ? 'A wallet is stored for this key-slot.'
-            : 'No wallet stored. Upload the signer’s private wallet file.'}
+            : 'No wallet stored for this signer.'}
         </p>
-        <div className="actions">
-          <button className="small" onClick={() => inputRef.current?.click()}>
-            {info ? 'Replace wallet' : 'Upload wallet'}
-          </button>
-          {info ? (
-            <button className="small" onClick={() => downloadWallet(person)}>
-              Download wallet
-            </button>
-          ) : null}
-        </div>
         {info ? (
           <div className="wallet-info">
             <p className="hint">DID</p>
@@ -333,14 +283,26 @@ export function SignersPage() {
               </button>
             </div>
             {showCreate === 'remote' ? (
-              <p className="hint">
-                Generates a W3C DID (did:key) key in this browser and asks the server to
-                issue the DocumentSigner credential to that remote wallet.
-              </p>
+              <div className="wallet-callout">
+                <p className="hint">
+                  A remote signer keeps its DocumentSigner credential in an external
+                  wallet. Open the demo wallet first, then name and create the signer
+                  below.
+                </p>
+                <DemoWalletLink className="button">
+                  Open the demo wallet ↗
+                </DemoWalletLink>
+              </div>
             ) : null}
-            <button className="small" type="button" onClick={() => setShowCreate('none')}>
-              Cancel
-            </button>
+            <div className="form-cancel">
+              <button
+                className="small"
+                type="button"
+                onClick={() => setShowCreate('none')}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         )}
       </section>

@@ -3,7 +3,7 @@ import { api, base64 } from '../api'
 import { digest, type PublicRequest } from '../../../shared/model'
 import { useNotice } from '../notice'
 import { Badge, Recipients, Timeline, Downloads, name, shortSlot } from '../components'
-import { PdfUpload, type PdfFile } from '../PdfUpload'
+import { FileUpload, type UploadedFile } from '../FileUpload'
 
 type KeySlotOption = { slotId: string; name?: string }
 
@@ -20,7 +20,7 @@ export function Dashboard() {
   const [selected, setSelected] = useState<PublicRequest>()
   const [title, setTitle] = useState('')
   const [version, setVersion] = useState('')
-  const [pdf, setPdf] = useState<PdfFile | null>(null)
+  const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
@@ -142,7 +142,17 @@ export function Dashboard() {
                 />
               </div>
             </div>
-            <PdfUpload file={pdf} onChange={setPdf} sampleUrl="/sample.pdf" />
+            <FileUpload
+              file={pdf}
+              onChange={setPdf}
+              accept="application/pdf"
+              extensions={['pdf']}
+              label="Drag & drop your PDF here"
+              typeLabel="PDF"
+              sampleUrl="/sample.pdf"
+              sampleLabel="Use sample PDF"
+              sampleHint="Or start with the included sample agreement."
+            />
             <div className="field">
               <label htmlFor="slot-filter">Signers</label>
               <input

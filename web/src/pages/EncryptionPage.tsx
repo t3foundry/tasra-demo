@@ -4,7 +4,7 @@ import { digest } from '../../../shared/model'
 import type { EncryptionRecord } from '../../../shared/encrypt'
 import { useNotice } from '../notice'
 import { shortSlot } from '../components'
-import { PdfUpload, type PdfFile } from '../PdfUpload'
+import { FileUpload, type UploadedFile } from '../FileUpload'
 
 type KeySlotOption = { slotId: string; name?: string; dcql?: unknown }
 
@@ -28,7 +28,7 @@ export function EncryptionPage() {
   const [records, setRecords] = useState<EncryptionRecord[]>([])
   const [title, setTitle] = useState('')
   const [version, setVersion] = useState('')
-  const [pdf, setPdf] = useState<PdfFile | null>(null)
+  const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [selectedSlot, setSelectedSlot] = useState('')
   const [busy, setBusy] = useState(false)
   const [createName, setCreateName] = useState('')
@@ -182,7 +182,17 @@ export function EncryptionPage() {
                 />
               </div>
             </div>
-            <PdfUpload file={pdf} onChange={setPdf} sampleUrl="/sample.pdf" />
+            <FileUpload
+              file={pdf}
+              onChange={setPdf}
+              accept="application/pdf"
+              extensions={['pdf']}
+              label="Drag & drop your PDF here"
+              typeLabel="PDF"
+              sampleUrl="/sample.pdf"
+              sampleLabel="Use sample PDF"
+              sampleHint="Or start with the included sample agreement."
+            />
             <div className="field">
               <label htmlFor="key">BLS encryption key</label>
               {keys.length ? (
