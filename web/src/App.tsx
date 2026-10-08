@@ -8,6 +8,7 @@ import { SignersPage } from './pages/SignersPage'
 import { VerifyPage } from './pages/VerifyPage'
 import { EncryptionPage } from './pages/EncryptionPage'
 import { DecryptionPage } from './pages/DecryptionPage'
+import { TermsOverlay, TermsPage } from './terms'
 
 function Header() {
   const { pathname } = useLocation()
@@ -64,12 +65,15 @@ function Main() {
         <Route path="/signers" element={<SignersPage />} />
         <Route path="/verify" element={<VerifyPage />} />
         <Route path="/sign/:id/:slot" element={<SignerPage />} />
+        <Route path="/terms" element={<TermsPage />} />
       </Routes>
     </main>
   )
 }
 
 function Layout() {
+  const { pathname } = useLocation()
+  const isTerms = pathname === '/terms'
   return (
     <>
       <div className="watermark" aria-hidden="true" />
@@ -81,6 +85,7 @@ function Layout() {
             Built with Tasra SDK · Verified signatures and identity-scoped BLS encryption.
             <span className="label">v{import.meta.env.VITE_APP_VERSION}</span>
           </footer>
+          {!isTerms ? <TermsOverlay /> : null}
         </NoticeProvider>
       </SenderProvider>
     </>
