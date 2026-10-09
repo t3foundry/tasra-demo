@@ -30,11 +30,13 @@ export function VerifyPage() {
   const [bundle, setBundle] = useState<UploadedFile | null>(null)
   const [locked, setLocked] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [verified, setVerified] = useState(false)
 
   async function verifyBundleZip() {
     if (!bundle || busy) return
     setBusy(true)
     setLocked(true)
+    setVerified(false)
     setStatus('Checking…')
     setClassName('')
     setSlots([])
@@ -47,6 +49,7 @@ export function VerifyPage() {
       const doc = result.title ? `“${result.title}”` : 'the document'
       setClassName('success')
       setStatus(`Verified. ${listNames(signers)} signed ${doc}.`)
+      setVerified(true)
     } catch (e) {
       setClassName('error')
       setStatus(e instanceof Error ? e.message : 'Verification failed')
@@ -78,16 +81,29 @@ export function VerifyPage() {
           typeLabel="ZIP"
           disabled={locked}
         />
-        <button
-          className="primary"
-          disabled={!bundle || busy}
-          onClick={() => void verifyBundleZip()}
-        >
-          {busy ? 'Verifying…' : 'Verify downloaded bundle'}
-        </button>
-        <p id="result" role="status" className={className}>
-          {status}
-        </p>
+        <div className="verify-actions">
+          <button
+            className="primary"
+            disabled={!bundle || busy || verified}
+            onClick={() => void verifyBundleZip()}
+          >
+            {busy ? 'Verifying…' : 'Verify downloaded bundle'}
+          </button>
+        </div>
+        {verified ? (
+          <div className="verify-result">
+            <span className="verify-badge" aria-hidden="true">
+              ✓
+            </span>
+            <p id="result" role="status" className={className}>
+              {status}
+            </p>
+          </div>
+        ) : (
+          <p id="result" role="status" className={className}>
+            {status}
+          </p>
+        )}
         {slots.length ? (
           <div className="slots-callout">
             <p className="slots-callout-title">

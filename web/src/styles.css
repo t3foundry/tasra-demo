@@ -319,11 +319,15 @@ button.primary:hover,
 .button.primary:hover {
   background: var(--brand);
   border-color: var(--brand);
+  color: #fff;
 }
 button:hover,
 .button:hover {
   border-color: var(--brand-deep);
   color: var(--brand-deep);
+}
+button.primary:hover {
+  color: #fff;
 }
 button:disabled {
   opacity: 0.45;
@@ -1015,6 +1019,37 @@ header :focus-visible {
 .signers {
   max-width: 680px;
   margin: 0 auto;
+}
+.verify-actions {
+  margin-top: 22px;
+}
+.verify-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 18px 20px;
+  background: var(--success-soft);
+  border: 1px solid var(--success-line);
+  border-radius: 6px;
+}
+.verify-badge {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+.verify-result p {
+  margin: 0;
+  flex: 1;
+  font-size: 15px;
 }
 .signers .panel {
   margin-bottom: 20px;
