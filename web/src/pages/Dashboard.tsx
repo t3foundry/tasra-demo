@@ -3,14 +3,7 @@ import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest, type PublicRequest, type SignerState } from '../../../shared/model'
 import { useNotice } from '../notice'
-import {
-  Recipients,
-  Timeline,
-  Downloads,
-  name,
-  shortSlot,
-  signerLabel,
-} from '../components'
+import { Downloads, name, shortSlot, signerLabel } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
 import { listLocalSigners } from '../localSigners'
 
@@ -237,14 +230,16 @@ export function Dashboard() {
                 (s) => signerStatus(s) === 'signed',
               ).length
               return (
-                <div className="request" key={r.manifest.requestId}>
+                <div
+                  className={'request' + (expanded ? ' open' : '')}
+                  key={r.manifest.requestId}
+                >
                   <div className="request-row">
                     <div>
                       <strong className="request-title">{r.manifest.title}</strong>
                       <small className="request-meta">
                         {r.signers.length} signer{r.signers.length === 1 ? '' : 's'} ·{' '}
-                        {signed} of {r.signers.length} signed ·{' '}
-                        {r.manifest.requestId.slice(0, 8)}
+                        {signed} of {r.signers.length} signed
                       </small>
                       <div className="signer-stamps">
                         {r.signers.map((s) => (
@@ -285,38 +280,61 @@ export function Dashboard() {
 
                   {expanded ? (
                     <div className="request-details">
-                      <div className="request-details-body">
-                        <Recipients r={r} />
-                        <div className="divider"></div>
-                        {r.manifest.signers.map((s) => (
-                          <div key={s.slotId}>
-                            <h3>
-                              <a
-                                href={`/sign/${r.manifest.requestId}/${s.slotId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                {s.name ? name(s.name) : shortSlot(s.slotId)}’s invitation ↗
-                              </a>
-                            </h3>
-                            <button
-                              className="small"
-                              onClick={async () => {
-                                await navigator.clipboard.writeText(
-                                  `${location.origin}/sign/${r.manifest.requestId}/${s.slotId}`,
-                                )
-                                notice('Invitation copied')
-                              }}
-                            >
-                              Copy {s.name ? name(s.name) : 'signer'}’s link
-                            </button>
-                            <div className="divider"></div>
-                          </div>
-                        ))}
+                      <section className="detail-section">
+                        <h3 className="detail-title">
+                          <span className="detail-title-inset">1</span>
+                          Actions
+                        </h3>
+                        <p className="hint detail-lead">
+                          Send each signer their private invitation link — copy it to
+                          share however you like, or open it to sign in this browser.
+                        </p>
+                        <div className="invites">
+                          {r.signers.map((s) => {
+                            const st = signerStatus(s)
+                            return (
+                              <div className="invite" key={s.slotId}>
+                                <span className="invite-who">
+                                  <span className={'invite-dot ' + st} aria-hidden="true" />
+                                  <strong>{signerLabel(s)}</strong>
+                                </span>
+                                <span className={'invite-state ' + st}>
+                                  {st === 'signed'
+                                    ? 'Signed'
+                                    : st === 'refused'
+                                      ? 'Refused'
+                                      : 'Pending'}
+                                </span>
+                                <span className="invite-actions">
+                                  <a
+                                    className="button small"
+                                    href={`/sign/${r.manifest.requestId}/${s.slotId}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Open invitation ↗
+                                  </a>
+                                  <button
+                                    className="small"
+                                    onClick={async () => {
+                                      await navigator.clipboard.writeText(
+                                        `${location.origin}/sign/${r.manifest.requestId}/${s.slotId}`,
+                                      )
+                                      notice('Invitation copied')
+                                    }}
+                                  >
+                                    Copy link
+                                  </button>
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <div className="detail-sep"></div>
                         <Downloads r={r} />
                         {r.status === 'awaiting' ? (
                           <>
-                            <div className="divider"></div>
+                            <div className="detail-sep"></div>
                             <button
                               className="small"
                               onClick={async () => {
@@ -331,8 +349,27 @@ export function Dashboard() {
                             </button>
                           </>
                         ) : null}
-                      </div>
-                      <Timeline r={r} />
+                      </section>
+
+                      <section className="detail-section">
+                        <h3 className="detail-title">
+                          <span className="detail-title-inset">2</span>
+                          Activity
+                        </h3>
+                        {r.history.length ? (
+                          <ol className="timeline">
+                            {r.history.map((h, i) => (
+                              <li key={i}>
+                                {h.person ? name(h.person) + ': ' : ''}
+                                {h.event}
+                                <time>{new Date(h.at).toLocaleString()}</time>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="hint">No activity yet.</p>
+                        )}
+                      </section>
                     </div>
                   ) : null}
                 </div>
