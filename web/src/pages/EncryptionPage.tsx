@@ -214,19 +214,18 @@ export function EncryptionPage() {
           {records.length ? (
             records.map((r) => (
               <div className="request" key={r.manifest.recordId}>
-                <div>
-                  <strong>{r.manifest.title}</strong>
-                  <small>
-                    encrypted · {Math.round(r.pdfSize / 1024)} KB plaintext
-                  </small>
-                </div>
-                <div className="actions">
-                  <button
-                    className="button small"
-                    onClick={() => downloadBundle(r)}
-                  >
-                    Download encrypted document
-                  </button>
+                <div className="request-row">
+                  <div>
+                    <strong className="request-title">{r.manifest.title}</strong>
+                  </div>
+                  <div className="request-actions">
+                    <button
+                      className="button small"
+                      onClick={() => downloadBundle(r)}
+                    >
+                      Download encrypted document
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
