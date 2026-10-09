@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { verifyCredential } from 'tasra-sdk/app'
 import { ed25519DidKey } from 'tasra-sdk/oid4vp'
 import { ed25519 } from '@noble/curves/ed25519'
 import { api } from '../api'
@@ -7,13 +6,11 @@ import { name, shortSlot } from '../components'
 import { DemoWalletLink } from '../DemoWalletLink'
 import { useNotice } from '../notice'
 import { toHex } from '../../../shared/model'
-import { importWallet } from '../../../shared/wallet'
 import {
   listLocalSigners,
   listPendingSigners,
   promotePendingSigner,
   pendingKey,
-  walletKey,
   type LocalSigner,
 } from '../localSigners'
 
@@ -31,68 +28,6 @@ const explorer = (slotId: string) =>
   `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
 
 const walletSchema = 'tasra-demo-wallet/v1'
-
-type WalletInfo = {
-  did: string
-  credential: string
-  claims: Record<string, unknown>
-}
-
-function describeWallet(text: string): WalletInfo {
-  const wallet = importWallet(text)
-  try {
-    return {
-      did: wallet.identity.toJSON().did,
-      credential: wallet.credential,
-      claims: verifyCredential(wallet.credential, {
-        holder: wallet.identity,
-        type: 'DocumentSigner',
-        subject: 'did:demo:' + wallet.name,
-      }),
-    }
-  } finally {
-    wallet.identity.destroy()
-  }
-}
-
-function WalletUpload({ person }: { person: string }) {
-  const [info, setInfo] = useState<WalletInfo | null>(null)
-
-  useEffect(() => {
-    const text = localStorage.getItem(walletKey(person))
-    try {
-      setInfo(text ? describeWallet(text) : null)
-    } catch {
-      setInfo(null)
-    }
-  }, [person])
-
-  return (
-    <details className="dcql">
-      <summary>
-        Demo wallet
-        <span className={info ? 'tag stored' : 'tag'}>
-          {info ? 'stored' : 'not stored'}
-        </span>
-      </summary>
-      <div className="wallet">
-        <p>
-          {info
-            ? 'A wallet is stored for this key-slot.'
-            : 'No wallet stored for this signer.'}
-        </p>
-        {info ? (
-          <div className="wallet-info">
-            <p className="hint">DID</p>
-            <pre className="code">{info.did}</pre>
-            <p className="hint">Verifiable credential</p>
-            <pre className="code">{JSON.stringify(info.claims, null, 2)}</pre>
-          </div>
-        ) : null}
-      </div>
-    </details>
-  )
-}
 
 export function SignersPage() {
   const notice = useNotice()
@@ -334,7 +269,6 @@ export function SignersPage() {
                   <small>DocumentSigner · did:demo:{s.name}</small>
                 </div>
               </div>
-              <WalletUpload person={s.name} />
               <h3>Key slot</h3>
               <div className="linkbox">
                 <a href={explorer(s.slotId)} target="_blank" rel="noopener noreferrer">

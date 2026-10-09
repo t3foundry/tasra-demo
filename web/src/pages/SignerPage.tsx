@@ -2,13 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../api'
 import { digest, type Hex, type PublicRequest } from '../../../shared/model'
-import {
-  importWallet,
-  present,
-  declineProof,
-  type DemoWallet,
-  type PublicSession,
-} from '../../../shared/wallet'
+import type { PublicSession } from '../../../shared/wallet'
 import { useNotice } from '../notice'
 import { Badge, Recipients, Downloads, signerLabel } from '../components'
 import { PdfPreview } from '../PdfPreview'
@@ -18,14 +12,12 @@ export function SignerPage() {
   const slotId = slot as Hex
   const notice = useNotice()
 
-  const [config, setConfig] = useState<{ verifierAgentUrl: string }>()
   const [r, setR] = useState<PublicRequest>()
   const [reviewedBytes, setReviewedBytes] = useState<Uint8Array>()
   const [reviewedHash, setReviewedHash] = useState('')
-  const [wallet, setWallet] = useState<DemoWallet>()
-  const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const remoteAbortRef = useRef(false)
+  const startedRef = useRef(false)
   const [remote, setRemote] = useState<{
     qrPayload: string
     qrDataUrl: string
@@ -44,31 +36,9 @@ export function SignerPage() {
     let active = true
     void (async () => {
       try {
-        const [cfg, initial] = await Promise.all([
-          api<{ verifierAgentUrl: string }>('/config'),
-          api<PublicRequest>('/requests/' + id),
-        ])
+        const initial = await api<PublicRequest>('/requests/' + id)
         if (!active) return
-        setConfig(cfg)
         setR(initial)
-        const signer = initial.signers.find(
-          (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
-        )
-        if (signer?.name) {
-          const stored = localStorage.getItem('tasra-wallet:' + signer.name)
-          if (stored) {
-            try {
-              const w = importWallet(stored)
-if (w.name === signer.name) {
-              setWallet(w)
-            } else {
-                w.identity.destroy()
-              }
-            } catch {
-              // Invalid stored wallet; manual upload remains available.
-            }
-          }
-        }
         const bytes = new Uint8Array(
           await (await fetch(`/api/requests/${id}/pdf`)).arrayBuffer(),
         )
@@ -84,7 +54,7 @@ if (w.name === signer.name) {
     return () => {
       active = false
     }
-  }, [id, slotId, notice])
+  }, [id, notice])
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -96,89 +66,12 @@ if (w.name === signer.name) {
     return () => clearInterval(timer)
   }, [id])
 
-  if (!r || !config) return <p>Opening your document workspace…</p>
-
-  const state = r.signers.find(
-    (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
-  )
-  if (!state) return <p>This request does not include that signer.</p>
-  const closed = ['completed', 'cancelled', 'declined'].includes(r.status)
-  const blocked =
-    closed ||
-    state.phase === 'signed' ||
-    ['uncertain', 'opening', 'signing'].includes(state.phase)
-
-  async function handleSign() {
-    if (!wallet || !config || !r) return
-    setBusy(true)
-    busyRef.current = true
-    notice('Requesting your wallet approval…')
-    try {
-      const prepared = await api<PublicRequest>(
-        `/requests/${id}/${slotId}/prepare`,
-        { documentSha256: reviewedHash },
-      )
-      const attemptId = prepared.signers.find(
-        (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
-      )!.attemptId!
-      const session = await api<PublicSession>(
-        `/requests/${id}/${slotId}/session`,
-        { attemptId },
-      )
-      const transport: typeof fetch = async (input, init) => {
-        const result = await api<{ status: number; contentType: string; body: string }>(
-          `/requests/${id}/${slotId}/transport`,
-          {
-            attemptId,
-            url: String(input),
-            method: init?.method ?? 'GET',
-            body: init?.body?.toString(),
-          },
-        )
-        return new Response(result.status === 204 ? null : result.body, {
-          status: result.status,
-          headers: { 'content-type': result.contentType ?? 'text/plain' },
-        })
-      }
-      if (session.status === 'pending')
-        await present(wallet, r.manifest, slotId, session, config.verifierAgentUrl, transport)
-      notice('Verifying your approval and saving the signature…')
-      await api(`/requests/${id}/${slotId}/complete`, { attemptId })
-      notice('Signature verified and saved')
-    } catch (e) {
-      notice((e as Error).message)
-    } finally {
-      setBusy(false)
-      busyRef.current = false
-      await refresh()
-    }
-  }
-
-  async function handleDecline() {
-    if (!wallet || !r) return
-    setBusy(true)
-    busyRef.current = true
-    try {
-      await api(`/requests/${id}/${slotId}/decline`, {
-        proof: declineProof(wallet, r.manifest, slotId),
-      })
-      notice('Document declined')
-    } catch (e) {
-      notice((e as Error).message)
-    } finally {
-      setBusy(false)
-      busyRef.current = false
-      await refresh()
-    }
-  }
-
-  async function handleRemoteSign() {
-    if (!config || !r) return
+  const runRemoteSign = useCallback(async () => {
+    if (!r || !reviewedHash) return
     remoteAbortRef.current = false
-    setBusy(true)
     busyRef.current = true
     setRemote(null)
-    notice('Opening a remote wallet session…')
+    notice('Opening a secure wallet session…')
     try {
       await api(`/requests/${id}/${slotId}/reset`, {})
       const prepared = await api<PublicRequest>(
@@ -228,11 +121,39 @@ if (w.name === signer.name) {
       setRemote(null)
       notice((e as Error).message)
     } finally {
-      setBusy(false)
       busyRef.current = false
       await refresh()
     }
-  }
+  }, [r, reviewedHash, id, slotId, notice, refresh])
+
+  useEffect(() => {
+    if (startedRef.current || !r || !reviewedHash) return
+    const signer = r.signers.find(
+      (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
+    )
+    if (!signer) return
+    const closed = ['completed', 'cancelled', 'declined'].includes(r.status)
+    if (
+      closed ||
+      signer.phase === 'signed' ||
+      ['uncertain', 'opening', 'signing'].includes(signer.phase)
+    )
+      return
+    startedRef.current = true
+    void runRemoteSign()
+  }, [r, reviewedHash, slotId, runRemoteSign])
+
+  if (!r) return <p>Opening your document workspace…</p>
+
+  const state = r.signers.find(
+    (s) => s.slotId.toLowerCase() === slotId.toLowerCase(),
+  )
+  if (!state) return <p>This request does not include that signer.</p>
+  const closed = ['completed', 'cancelled', 'declined'].includes(r.status)
+  const blocked =
+    closed ||
+    state.phase === 'signed' ||
+    ['uncertain', 'opening', 'signing'].includes(state.phase)
 
   async function copyRemote() {
     if (!remote) return
@@ -295,63 +216,34 @@ if (w.name === signer.name) {
                 replacement signature.
               </p>
             ) : null}
-            {!blocked ? (
-              <p className="signer-ready">
-                {signerLabel(state)} is ready to sign this document.
-              </p>
-            ) : null}
-            {!blocked ? (
-              <>
-                <button
-                  className="primary wide"
-                  disabled={!wallet || busy}
-                  onClick={handleSign}
-                >
-                  Approve and sign
-                </button>
-                <button
-                  className="wide small"
-                  disabled={!wallet || busy}
-                  onClick={handleDecline}
-                >
-                  Decline document
-                </button>
-                <div className="divider"></div>
-                <button
-                  className="wide"
-                  disabled={busy}
-                  onClick={handleRemoteSign}
-                >
-                  Remote signature
-                </button>
-                {remote ? (
-                  <div className="vc-offer">
-                    <img
-                      src={remote.qrDataUrl}
-                      alt="Remote signature QR code"
-                      width={200}
-                      height={200}
-                    />
-                    <p className="hint">
-                      Scan this QR with the signer’s remote wallet to authorize the
-                      signature, or copy the session URL below into it.
-                    </p>
-                    <div className="linkbox">{remote.qrPayload}</div>
-                    <div className="actions">
-                      <button className="small" type="button" onClick={copyRemote}>
-                        {copied ? 'Copied' : 'Copy session URL'}
-                      </button>
-                      <button
-                        className="small"
-                        type="button"
-                        onClick={() => void cancelRemote()}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </>
+            {remote ? (
+              <div className="vc-offer">
+                <img
+                  src={remote.qrDataUrl}
+                  alt="Remote signature QR code"
+                  width={200}
+                  height={200}
+                />
+                <p className="hint">
+                  Scan this QR with the signer’s remote wallet to authorize the
+                  signature, or copy the session URL below into it.
+                </p>
+                <div className="linkbox">{remote.qrPayload}</div>
+                <div className="actions">
+                  <button className="small" type="button" onClick={copyRemote}>
+                    {copied ? 'Copied' : 'Copy session URL'}
+                  </button>
+                  <button
+                    className="small"
+                    type="button"
+                    onClick={() => void cancelRemote()}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : state.phase === 'signed' ? null : !blocked ? (
+              <p className="hint">Opening your secure signing session…</p>
             ) : null}
             {state.phase === 'signed' ? (
               <p className="success">Your approval has been verified and saved.</p>

@@ -352,7 +352,7 @@ export function Dashboard() {
                       </section>
 
                       <section className="detail-section">
-                        <h3 className="detail-title">
+                        <h3 className="detail-title detail-title-activity">
                           <span className="detail-title-inset">2</span>
                           Activity
                         </h3>

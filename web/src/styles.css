@@ -648,6 +648,9 @@ input[type='checkbox'] {
   font: 700 10px ui-monospace, monospace;
   flex-shrink: 0;
 }
+.detail-title-activity {
+  margin-left: 20px;
+}
 .detail-lead {
   margin: 0 0 14px;
 }
