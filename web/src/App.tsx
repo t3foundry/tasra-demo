@@ -22,6 +22,10 @@ function Header() {
     pathname === '/encryption' ||
     pathname === '/keys' ||
     pathname === '/decryption'
+  const isActive = (to: string) =>
+    to === '/signing'
+      ? pathname === '/signing' || pathname.startsWith('/sign/')
+      : pathname === to
   return (
     <header>
       <div className="bar">
@@ -31,16 +35,28 @@ function Header() {
         </a>
         {signing ? (
           <nav aria-label="Main">
-            <Link to="/signing">Sign Document</Link>
-            <Link to="/signers">Signing Keys</Link>
-            <Link to="/verify">Verification</Link>
+            <Link className={isActive('/signing') ? 'active' : ''} to="/signing">
+              Sign Document
+            </Link>
+            <Link className={isActive('/signers') ? 'active' : ''} to="/signers">
+              Signing Keys
+            </Link>
+            <Link className={isActive('/verify') ? 'active' : ''} to="/verify">
+              Verification
+            </Link>
           </nav>
         ) : null}
         {encrypting ? (
           <nav aria-label="Encryption">
-            <Link to="/encryption">Encryption</Link>
-            <Link to="/keys">Keys</Link>
-            <Link to="/decryption">Decryption</Link>
+            <Link className={isActive('/encryption') ? 'active' : ''} to="/encryption">
+              Encryption
+            </Link>
+            <Link className={isActive('/keys') ? 'active' : ''} to="/keys">
+              Keys
+            </Link>
+            <Link className={isActive('/decryption') ? 'active' : ''} to="/decryption">
+              Decryption
+            </Link>
           </nav>
         ) : null}
         <nav className="bar-links" aria-label="External">

@@ -105,6 +105,19 @@ header {
   color: #cdeaf2;
   text-decoration: underline;
 }
+.bar nav a.active {
+  color: #fff;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 6px;
+}
+.bar nav a.active::after {
+  content: '';
+  display: block;
+  height: 2px;
+  background: #fff;
+  margin-top: 2px;
+}
 .bar-links {
   margin-left: auto;
 }
