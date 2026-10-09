@@ -34,6 +34,7 @@ export function Dashboard() {
   const [title, setTitle] = useState('')
   const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [busy, setBusy] = useState(false)
+  const [sendCollapsed, setSendCollapsed] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
 
@@ -100,6 +101,10 @@ export function Dashboard() {
       })
       sessionStorage.removeItem('pending-request')
       setExpandedId(created.manifest.requestId)
+      setTitle('')
+      setPdf(null)
+      setSelectedSlots([])
+      setSendCollapsed(true)
       notice('Request created. Share each signer’s invitation.')
       await load()
     } catch (e) {
@@ -123,8 +128,22 @@ export function Dashboard() {
       </div>
       <div className="stack">
         <section className="panel">
-          <h2>Send a document</h2>
+          <div className="send-head">
+            <h2>Send a document</h2>
+            {sendCollapsed ? (
+              <button className="small" onClick={() => setSendCollapsed(false)}>
+                + New document
+              </button>
+            ) : null}
+          </div>
 
+          {sendCollapsed ? (
+            <p className="hint send-collapsed-note">
+              Your request was created and added to the list below. Configure a new
+              document whenever you’re ready.
+            </p>
+          ) : (
+            <>
           <div className="send-step">
             <div className="send-step-head">
               <span className="send-step-num" aria-hidden="true">
@@ -219,6 +238,8 @@ export function Dashboard() {
               Create signing request
             </button>
           </div>
+            </>
+          )}
         </section>
 
         <section className="panel">

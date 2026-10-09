@@ -852,6 +852,19 @@ input[type='checkbox'] {
   overflow-wrap: anywhere;
   color: var(--muted);
 }
+.send-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.send-head h2 {
+  margin: 0;
+}
+.send-collapsed-note {
+  margin: 0;
+}
 .send-step-head {
   display: flex;
   align-items: center;
