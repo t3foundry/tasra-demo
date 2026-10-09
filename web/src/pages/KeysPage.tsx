@@ -50,7 +50,7 @@ export function KeysPage() {
   async function startCreation(raw: string) {
     const name = raw.trim().toLowerCase()
     if (!name) {
-      notice('Enter a key name')
+      notice('Enter a key name', 'error')
       return
     }
     const push = (message: string) =>
@@ -66,7 +66,7 @@ export function KeysPage() {
             slotId: job.result!.slotId,
           })
           setCreating(null)
-          notice(`Key ${name} created. Now issue its credential from step 3.`)
+          notice(`Key ${name} created. Now issue its credential from step 3.`, 'success')
           load()
           return
         }
@@ -78,7 +78,7 @@ export function KeysPage() {
       throw new Error('Key creation timed out')
     } catch (e) {
       setCreating(null)
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }
 
@@ -94,7 +94,7 @@ export function KeysPage() {
       )
       setVcOffer({ name, offer })
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       setIssuingVc(null)
     }
@@ -107,7 +107,7 @@ export function KeysPage() {
       setCopiedVc(true)
       setTimeout(() => setCopiedVc(false), 1500)
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }
 

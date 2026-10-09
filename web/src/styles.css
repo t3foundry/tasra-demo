@@ -931,7 +931,7 @@ input[type='checkbox'] {
 }
 #notice {
   position: fixed;
-  bottom: 24px;
+  top: 94px;
   left: 50%;
   transform: translateX(-50%);
   max-width: 90%;
@@ -939,15 +939,26 @@ input[type='checkbox'] {
   color: #fff;
   padding: 13px 22px;
   border-radius: 4px;
-  box-shadow: 0 2px 15px #0002;
+  box-shadow: 0 8px 28px #0003;
   font-size: 13px;
-  z-index: 5;
+  z-index: 10001;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition:
+    opacity 0.6s ease,
+    transform 0.4s ease;
 }
 #notice.visible {
   opacity: 1;
+  transform: translate(-50%, 8px);
+}
+#notice[data-kind='success'] {
+  background: var(--success);
+  color: #fff;
+}
+#notice[data-kind='error'] {
+  background: var(--danger);
+  color: #fff;
 }
 footer {
   border-top: 1px solid var(--line);

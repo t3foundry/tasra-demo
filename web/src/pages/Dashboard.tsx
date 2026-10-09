@@ -49,7 +49,7 @@ export function Dashboard() {
   }, [])
 
   useEffect(() => {
-    void load().catch((e) => notice(e.message))
+    void load().catch((e) => notice(e.message, 'error'))
   }, [load, notice])
 
   useEffect(() => {
@@ -105,10 +105,10 @@ export function Dashboard() {
       setPdf(null)
       setSelectedSlots([])
       setSendCollapsed(true)
-      notice('Request created. Share each signer’s invitation.')
+      notice('Request created. Share each signer’s invitation.', 'success')
       await load()
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       setBusy(false)
     }
@@ -341,7 +341,7 @@ export function Dashboard() {
                                       await navigator.clipboard.writeText(
                                         `${location.origin}/sign/${r.manifest.requestId}/${s.slotId}`,
                                       )
-                                      notice('Invitation copied')
+                                      notice('Invitation copied', 'success')
                                     }}
                                   >
                                     Copy link

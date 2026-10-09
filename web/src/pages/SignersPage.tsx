@@ -54,7 +54,7 @@ export function SignersPage() {
   async function startCreation(raw: string) {
     const name = raw.trim().toLowerCase()
     if (!name) {
-      notice('Enter a signer name')
+      notice('Enter a signer name', 'error')
       return
     }
     const push = (message: string) =>
@@ -80,7 +80,7 @@ export function SignersPage() {
           }
           localStorage.setItem(pendingKey(name), JSON.stringify(wallet))
           setCreating(null)
-          notice(`Signer ${name} created. Now issue its credential from step 3.`)
+          notice(`Signer ${name} created. Now issue its credential from step 3.`, 'success')
           load()
           return
         }
@@ -92,7 +92,7 @@ export function SignersPage() {
       throw new Error('Signer creation timed out')
     } catch (e) {
       setCreating(null)
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }
 
@@ -105,7 +105,7 @@ export function SignersPage() {
       const offer = await api<IssueVcResult>(`/signers/${name}/issue-vc`, {})
       setVcOffer({ name, offer })
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       setIssuingVc(null)
     }
@@ -118,7 +118,7 @@ export function SignersPage() {
       setCopiedVc(true)
       setTimeout(() => setCopiedVc(false), 1500)
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }
 

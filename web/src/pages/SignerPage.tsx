@@ -28,7 +28,7 @@ export function SignerPage() {
     try {
       setR(await api<PublicRequest>('/requests/' + id))
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }, [id, notice])
 
@@ -48,7 +48,7 @@ export function SignerPage() {
         setReviewedBytes(bytes)
         setReviewedHash(hash)
       } catch (e) {
-        if (active) notice((e as Error).message)
+        if (active) notice((e as Error).message, 'error')
       }
     })()
     return () => {
@@ -107,7 +107,7 @@ export function SignerPage() {
           setRemote(null)
           notice('Wallet approved; verifying and saving the signature…')
           await api(`/requests/${id}/${slotId}/complete`, { attemptId })
-          notice('Signature verified and saved')
+          notice('Signature verified and saved', 'success')
           return
         }
         if (status.status === 'failed')
@@ -119,7 +119,7 @@ export function SignerPage() {
       }
     } catch (e) {
       setRemote(null)
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       busyRef.current = false
       await refresh()
@@ -162,7 +162,7 @@ export function SignerPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch (e) {
-      notice('Could not copy: ' + (e as Error).message)
+      notice('Could not copy: ' + (e as Error).message, 'error')
     }
   }
 
@@ -172,9 +172,9 @@ export function SignerPage() {
     setCopied(false)
     try {
       await api(`/requests/${id}/${slotId}/reset`, {})
-      notice('Remote signature cancelled')
+      notice('Remote signature cancelled', 'success')
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     }
   }
 

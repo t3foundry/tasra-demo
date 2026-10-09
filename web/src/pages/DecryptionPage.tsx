@@ -82,9 +82,9 @@ export function DecryptionPage() {
       )
         throw new Error('That file is not a Tasra encryption bundle')
       setBundle(parsed as EncryptionBundle)
-      notice('Ciphertext loaded. Ready to request decryption.')
+      notice('Ciphertext loaded. Ready to request decryption.', 'success')
     } catch (e) {
-      notice('Could not read that file: ' + (e as Error).message)
+      notice('Could not read that file: ' + (e as Error).message, 'error')
     } finally {
       if (fileRef.current) fileRef.current.value = ''
     }
@@ -108,7 +108,7 @@ export function DecryptionPage() {
           setPlaintext(bytes)
           setPdfName(s.fileName)
           setRemote(null)
-          notice('Document decrypted')
+          notice('Document decrypted', 'success')
           return
         }
         if (s.status === 'failed') throw new Error(s.error ?? 'Decryption failed')
@@ -117,7 +117,7 @@ export function DecryptionPage() {
       }
     } catch (e) {
       setRemote(null)
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       setBusy(false)
     }
@@ -130,7 +130,7 @@ export function DecryptionPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     } catch (e) {
-      notice('Could not copy: ' + (e as Error).message)
+      notice('Could not copy: ' + (e as Error).message, 'error')
     }
   }
 

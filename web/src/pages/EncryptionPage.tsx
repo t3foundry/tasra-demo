@@ -89,9 +89,9 @@ export function EncryptionPage() {
       setPdf(null)
       setSelectedSlot('')
       loadRecords()
-      notice('Document encrypted. Download the bundle to send the ciphertext.')
+      notice('Document encrypted. Download the bundle to send the ciphertext.', 'success')
     } catch (e) {
-      notice((e as Error).message)
+      notice((e as Error).message, 'error')
     } finally {
       setBusy(false)
     }
