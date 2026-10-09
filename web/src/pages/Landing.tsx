@@ -156,12 +156,25 @@ export function Landing() {
           Sign and encrypt documents, hold credentials in your demo wallet, browse
           on-chain state and dig into the SDK — everything you need in one place.
         </p>
+        <div className="landing-hero-actions">
+          <a
+            className="button primary landing-hero-cta"
+            href="https://docs.tasra.network"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Try the SDK
+            <span className="landing-hero-cta-arrow" aria-hidden="true">
+              ↗
+            </span>
+          </a>
+        </div>
       </section>
 
       <div className="landing-section">
         <div className="landing-section-head">
           <h2>Demo apps</h2>
-          <span className="landing-section-note">Fuji C-Chain</span>
+          <span className="landing-section-note">Built with Tasra Network SDK</span>
         </div>
         <div className="app-grid">
           {demoApps.map((app) => (

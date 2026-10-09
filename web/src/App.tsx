@@ -38,6 +38,29 @@ function Header() {
             <Link to="/decryption">Decryption</Link>
           </nav>
         ) : null}
+        <nav className="bar-links" aria-label="External">
+          <a
+            href="https://docs.tasra.network"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Documentation
+          </a>
+          <a
+            href="https://github.com/t3foundry"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://t.me/+eTA2Uz0TbSA2ZTI0"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Telegram
+          </a>
+        </nav>
       </div>
     </header>
   )
@@ -82,8 +105,19 @@ function Layout() {
           <Header />
           <Main />
           <footer>
-            Built with Tasra SDK · Verified signatures and identity-scoped BLS encryption.
-            <span className="label">v{import.meta.env.VITE_APP_VERSION}</span>
+            <span className="footer-note">
+              Built with Tasra SDK · Verified signatures and identity-scoped
+              BLS encryption.
+              <span className="label">v{import.meta.env.VITE_APP_VERSION}</span>
+            </span>
+            <a
+              className="footer-link"
+              href="https://t3foundry.com/en/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </a>
           </footer>
           {!isTerms ? <TermsOverlay /> : null}
         </NoticeProvider>

@@ -113,20 +113,45 @@ export function TermsOverlay() {
       aria-labelledby="terms-overlay-title"
     >
       <div className="terms-modal">
-        <h2 id="terms-overlay-title">Terms &amp; Conditions</h2>
-        <p>
-          Please read the full Terms and Conditions before using the Tasra demo
-          application.
-        </p>
-        <p>
-          <Link to="/terms" target="_blank" rel="noopener noreferrer">
-            Read the Terms and Conditions
-          </Link>
-        </p>
-        <p className="terms-cookie-note">This site does not use any cookies.</p>
-        <button type="button" className="primary" onClick={agree}>
-          Agree to T&amp;C
-        </button>
+        <div className="terms-stripe" aria-hidden="true" />
+        <div className="terms-body">
+          <span className="terms-stamp" aria-hidden="true">
+            Testnet
+          </span>
+          <div className="terms-eyebrow">
+            <span className="terms-status-dot" aria-hidden="true" />
+            Testnet Environment · Fuji C-Chain
+          </div>
+          <h2 id="terms-overlay-title" className="terms-title">
+            Demo &amp; Testnet Notice
+          </h2>
+          <p className="terms-lead">
+            Welcome to the Tasra demo application. This environment is provided
+            strictly for testing and demonstration purposes.
+          </p>
+          <p className="terms-links">
+            Please review our{' '}
+            <Link to="/terms" target="_blank" rel="noopener noreferrer">
+              Terms &amp; Conditions
+            </Link>{' '}
+            and{' '}
+            <a
+              href="https://t3foundry.com/en/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Privacy Policy
+            </a>{' '}
+            before proceeding.
+          </p>
+          <button
+            type="button"
+            className="primary terms-submit"
+            onClick={agree}
+          >
+            Accept &amp; Continue
+          </button>
+        </div>
       </div>
     </div>
   )
