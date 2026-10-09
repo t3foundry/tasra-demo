@@ -122,12 +122,6 @@ export function SignersPage() {
     }
   }
 
-  const step3Signers: LocalSigner[] = [...pending]
-  if (vcOffer && !step3Signers.some((s) => s.name === vcOffer.name)) {
-    const offered = signers.find((s) => s.name === vcOffer.name)
-    if (offered) step3Signers.push(offered)
-  }
-
   return (
     <div className="signers">
       <div className="eyebrow">Signing keys</div>
@@ -208,8 +202,8 @@ export function SignersPage() {
               </p>
             </div>
           </div>
-          {step3Signers.length ? (
-            step3Signers.map((p) => (
+          {pending.length ? (
+            pending.map((p) => (
               <div className="issue-box" key={p.name}>
                 <div className="person">
                   <div className="avatar">{name(p.name)[0]}</div>
@@ -275,6 +269,38 @@ export function SignersPage() {
                   {s.slotId}
                 </a>
               </div>
+              <h3>Issue VC</h3>
+              <button
+                className="small"
+                disabled={issuingVc === s.name}
+                onClick={() => void issueVc(s.name)}
+              >
+                {issuingVc === s.name
+                  ? 'Creating QR…'
+                  : vcOffer?.name === s.name
+                    ? 'Regenerate QR'
+                    : 'Issue VC'}
+              </button>
+              {vcOffer?.name === s.name ? (
+                <div className="vc-offer">
+                  <img
+                    src={vcOffer.offer.qrDataUrl}
+                    alt="Credential offer QR code"
+                    width={200}
+                    height={200}
+                  />
+                  <p className="hint">
+                    Scan with a remote wallet to receive this signer’s DocumentSigner
+                    credential. Offer expires in 15 minutes.
+                  </p>
+                  <div className="linkbox">
+                    <small>{vcOffer.offer.offerUri}</small>
+                  </div>
+                  <button className="small" type="button" onClick={() => void copyVc()}>
+                    {copiedVc ? 'Copied' : 'Copy URL'}
+                  </button>
+                </div>
+              ) : null}
             </section>
           ))}
         </>

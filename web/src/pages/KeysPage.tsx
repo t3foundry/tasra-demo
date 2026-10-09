@@ -111,12 +111,6 @@ export function KeysPage() {
     }
   }
 
-  const step3Keys: LocalEncryptionKey[] = [...pending]
-  if (vcOffer && !step3Keys.some((k) => k.name === vcOffer.name)) {
-    const offered = keys.find((k) => k.name === vcOffer.name)
-    if (offered) step3Keys.push(offered)
-  }
-
   return (
     <div className="signers">
       <div className="eyebrow">Encryption keys</div>
@@ -199,8 +193,8 @@ export function KeysPage() {
               </p>
             </div>
           </div>
-          {step3Keys.length ? (
-            step3Keys.map((k) => (
+          {pending.length ? (
+            pending.map((k) => (
               <div className="issue-box" key={k.name}>
                 <div className="person">
                   <div className="avatar">{k.name[0]}</div>
@@ -266,6 +260,38 @@ export function KeysPage() {
                   {k.slotId}
                 </a>
               </div>
+              <h3>Issue VC</h3>
+              <button
+                className="small"
+                disabled={issuingVc === k.name}
+                onClick={() => void issueVc(k.name)}
+              >
+                {issuingVc === k.name
+                  ? 'Creating QR…'
+                  : vcOffer?.name === k.name
+                    ? 'Regenerate QR'
+                    : 'Issue VC'}
+              </button>
+              {vcOffer?.name === k.name ? (
+                <div className="vc-offer">
+                  <img
+                    src={vcOffer.offer.qrDataUrl}
+                    alt="Credential offer QR code"
+                    width={200}
+                    height={200}
+                  />
+                  <p className="hint">
+                    Scan with a remote wallet to receive this key’s DocumentReader
+                    credential. Offer expires in 30 minutes.
+                  </p>
+                  <div className="linkbox">
+                    <small>{vcOffer.offer.offerUri}</small>
+                  </div>
+                  <button className="small" type="button" onClick={() => void copyVc()}>
+                    {copiedVc ? 'Copied' : 'Copy URL'}
+                  </button>
+                </div>
+              ) : null}
             </section>
           ))}
         </>
