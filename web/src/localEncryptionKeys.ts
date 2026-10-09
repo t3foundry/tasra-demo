@@ -1,10 +1,11 @@
 export type LocalEncryptionKey = { name: string; slotId: string }
 
 const storageKey = 'tasra-encryption-keys'
+const pendingKey = 'tasra-encryption-keys-pending'
 
-export function listLocalEncryptionKeys(): LocalEncryptionKey[] {
+function readKeys(storage: string): LocalEncryptionKey[] {
   try {
-    const raw = localStorage.getItem(storageKey)
+    const raw = localStorage.getItem(storage)
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
@@ -21,8 +22,35 @@ export function listLocalEncryptionKeys(): LocalEncryptionKey[] {
   }
 }
 
+export function listLocalEncryptionKeys(): LocalEncryptionKey[] {
+  return readKeys(storageKey)
+}
+
+export function listPendingLocalEncryptionKeys(): LocalEncryptionKey[] {
+  return readKeys(pendingKey)
+}
+
 export function saveLocalEncryptionKey(record: LocalEncryptionKey): void {
   const keys = listLocalEncryptionKeys().filter((k) => k.name !== record.name)
   keys.push(record)
   localStorage.setItem(storageKey, JSON.stringify(keys))
+}
+
+export function savePendingLocalEncryptionKey(record: LocalEncryptionKey): void {
+  const keys = listPendingLocalEncryptionKeys().filter(
+    (k) => k.name !== record.name,
+  )
+  keys.push(record)
+  localStorage.setItem(pendingKey, JSON.stringify(keys))
+}
+
+export function promotePendingEncryptionKey(name: string): void {
+  const pending = listPendingLocalEncryptionKeys()
+  const found = pending.find((k) => k.name === name)
+  if (!found) return
+  saveLocalEncryptionKey(found)
+  localStorage.setItem(
+    pendingKey,
+    JSON.stringify(pending.filter((k) => k.name !== name)),
+  )
 }

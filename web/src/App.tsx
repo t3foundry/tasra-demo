@@ -5,6 +5,7 @@ import { Landing } from './pages/Landing'
 import { Dashboard } from './pages/Dashboard'
 import { SignerPage } from './pages/SignerPage'
 import { SignersPage } from './pages/SignersPage'
+import { KeysPage } from './pages/KeysPage'
 import { VerifyPage } from './pages/VerifyPage'
 import { EncryptionPage } from './pages/EncryptionPage'
 import { DecryptionPage } from './pages/DecryptionPage'
@@ -17,7 +18,10 @@ function Header() {
     pathname === '/signers' ||
     pathname === '/verify' ||
     pathname.startsWith('/sign/')
-  const encrypting = pathname === '/encryption' || pathname === '/decryption'
+  const encrypting =
+    pathname === '/encryption' ||
+    pathname === '/keys' ||
+    pathname === '/decryption'
   return (
     <header>
       <div className="bar">
@@ -35,6 +39,7 @@ function Header() {
         {encrypting ? (
           <nav aria-label="Encryption">
             <Link to="/encryption">Encryption</Link>
+            <Link to="/keys">Keys</Link>
             <Link to="/decryption">Decryption</Link>
           </nav>
         ) : null}
@@ -71,6 +76,7 @@ function routeClass(pathname: string): string {
   if (pathname === '/signers') return 'route-signers'
   if (pathname === '/verify') return 'route-verify'
   if (pathname === '/encryption') return 'route-encryption'
+  if (pathname === '/keys') return 'route-encryption'
   if (pathname === '/decryption') return 'route-decryption'
   if (pathname.startsWith('/sign/')) return 'route-signer'
   return ''
@@ -84,6 +90,7 @@ function Main() {
         <Route path="/" element={<Landing />} />
         <Route path="/signing" element={<Dashboard />} />
         <Route path="/encryption" element={<EncryptionPage />} />
+        <Route path="/keys" element={<KeysPage />} />
         <Route path="/decryption" element={<DecryptionPage />} />
         <Route path="/signers" element={<SignersPage />} />
         <Route path="/verify" element={<VerifyPage />} />
