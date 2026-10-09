@@ -88,7 +88,7 @@ export function SignerPage() {
       if (!session.qrPayload || !session.qrDataUrl)
         throw new Error('The wallet session did not include a QR payload')
       setRemote({ qrPayload: session.qrPayload, qrDataUrl: session.qrDataUrl })
-      notice('Scan the QR with the signer’s remote wallet')
+      notice('Scan the QR with the signer’s demo wallet, Tasra Vault.')
       const deadline = Date.now() + 5 * 60 * 1000
       while (true) {
         if (remoteAbortRef.current) {
