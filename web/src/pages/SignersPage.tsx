@@ -127,8 +127,8 @@ export function SignersPage() {
       <div className="eyebrow">Signing keys</div>
       <h1>Add a signer.</h1>
       <p className="sub">
-        Each signer holds a dedicated on-chain key slot gated by a credential rule
-        (DCQL). Only the matching demo credential can authorize a signature.
+        Every signer has a secure, reserved key that requires a specific digital
+        credential to authorize their signature.
       </p>
 
       <section className="panel create-signer">

@@ -121,8 +121,8 @@ export function Dashboard() {
           <div className="eyebrow">Documents</div>
           <h1>From draft to signed.</h1>
           <p className="sub">
-            Upload a PDF. Choose any signers from the registry, then keep a verifiable
-            record of their approval.
+            Upload a PDF, select signers, and maintain a clear, trusted record of every
+            approval.
           </p>
         </div>
       </div>

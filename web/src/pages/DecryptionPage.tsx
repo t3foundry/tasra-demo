@@ -143,8 +143,8 @@ export function DecryptionPage() {
           <div className="eyebrow">Decryption</div>
           <h1>Open a private document.</h1>
           <p className="sub">
-            Upload an encryption bundle, then present the DocumentReader credential that
-            authorizes the threshold extraction unlocking the plaintext.
+            Upload an encrypted file, then present your DocumentReader credential to unlock
+            and view the original document.
           </p>
         </div>
       </div>

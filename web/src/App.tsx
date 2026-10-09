@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
 import { NoticeProvider } from './notice'
 import { SenderProvider } from './sender'
@@ -117,12 +118,21 @@ function Main() {
   )
 }
 
+function ScrollToTop() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+  return null
+}
+
 function Layout() {
   const { pathname } = useLocation()
   const isTerms = pathname === '/terms'
   return (
     <>
       <div className="watermark" aria-hidden="true" />
+      <ScrollToTop />
       <SenderProvider>
         <NoticeProvider>
           <Header />

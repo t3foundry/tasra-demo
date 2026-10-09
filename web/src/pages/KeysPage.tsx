@@ -116,9 +116,8 @@ export function KeysPage() {
       <div className="eyebrow">Encryption keys</div>
       <h1>Add a key.</h1>
       <p className="sub">
-        Each key is a 2-of-3 BLS slot gated by a DocumentReader credential scope.
-        Creating a key funds it with TSRA from the creator wallet. A credential is
-        required to unlock documents encrypted to that key.
+        Each encryption key is protected by multi-signature security that require
+        matching credentials to open
       </p>
 
       <section className="panel create-signer">

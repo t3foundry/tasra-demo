@@ -63,8 +63,8 @@ export function VerifyPage() {
       <div className="eyebrow">Independent verification</div>
       <h1>Check the agreement.</h1>
       <p className="sub">
-        Upload a signed document bundle to verify both signatures against the current
-        on-chain keys.
+        Upload a signed file to automatically verify its signatures against live key
+        records.
       </p>
       <section className="panel">
         <h2>Verify signed document from downloaded bundle</h2>

@@ -104,8 +104,8 @@ export function EncryptionPage() {
           <div className="eyebrow">Encryption</div>
           <h1>Encrypt a document.</h1>
           <p className="sub">
-            Pick a BLS identity-encryption key, then encrypt a PDF to a scoped
-            identity. Only a holder with the matching credential can later open it.
+            Select an identity key, lock your PDF to a specific recipient, and ensure only
+            someone with the matching credential can open it.
           </p>
         </div>
       </div>
