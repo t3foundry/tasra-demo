@@ -269,7 +269,6 @@ export function SignersPage() {
                   {s.slotId}
                 </a>
               </div>
-              <h3>Issue VC</h3>
               <button
                 className="small"
                 disabled={issuingVc === s.name}

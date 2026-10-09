@@ -260,7 +260,6 @@ export function KeysPage() {
                   {k.slotId}
                 </a>
               </div>
-              <h3>Issue VC</h3>
               <button
                 className="small"
                 disabled={issuingVc === k.name}
