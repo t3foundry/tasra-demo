@@ -164,9 +164,6 @@ export function Landing() {
             rel="noopener noreferrer"
           >
             Try the SDK
-            <span className="landing-hero-cta-arrow" aria-hidden="true">
-              ↗
-            </span>
           </a>
         </div>
       </section>
