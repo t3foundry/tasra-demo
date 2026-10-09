@@ -64,7 +64,7 @@ const ecosystem: Eco[] = [
     tagline: 'Demo On-chain Data',
     description:
       'Inspect key slots, verifiers and the live state of the Fuji testnet.',
-    href: 'https://explorer.t3-foundry.fuji.tasra.network/verifiers',
+    href: 'https://explorer.t3-foundry.fuji.tasra.network/',
     accent: 'var(--success)',
   },
   {

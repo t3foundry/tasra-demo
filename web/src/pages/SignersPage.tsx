@@ -3,17 +3,19 @@ import { verifyCredential } from 'tasra-sdk/app'
 import { ed25519DidKey } from 'tasra-sdk/oid4vp'
 import { ed25519 } from '@noble/curves/ed25519'
 import { api } from '../api'
-import { name } from '../components'
+import { name, shortSlot } from '../components'
 import { DemoWalletLink } from '../DemoWalletLink'
 import { useNotice } from '../notice'
 import { toHex } from '../../../shared/model'
 import { importWallet } from '../../../shared/wallet'
-import { listLocalSigners, walletKey } from '../localSigners'
-
-type SignerInfo = {
-  name: string
-  slotId: string
-}
+import {
+  listLocalSigners,
+  listPendingSigners,
+  promotePendingSigner,
+  pendingKey,
+  walletKey,
+  type LocalSigner,
+} from '../localSigners'
 
 type SignerJob = {
   name: string
@@ -29,8 +31,6 @@ const explorer = (slotId: string) =>
   `https://explorer.t3-foundry.fuji.tasra.network/slots/${slotId}`
 
 const walletSchema = 'tasra-demo-wallet/v1'
-
-
 
 type WalletInfo = {
   did: string
@@ -96,8 +96,8 @@ function WalletUpload({ person }: { person: string }) {
 
 export function SignersPage() {
   const notice = useNotice()
-  const [signers, setSigners] = useState<SignerInfo[]>([])
-  const [showCreate, setShowCreate] = useState<'none' | 'signer'>('none')
+  const [signers, setSigners] = useState<LocalSigner[]>([])
+  const [pending, setPending] = useState<LocalSigner[]>([])
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState<{
     name: string
@@ -106,8 +106,10 @@ export function SignersPage() {
   const [vcOffer, setVcOffer] = useState<{ name: string; offer: IssueVcResult } | null>(null)
   const [issuingVc, setIssuingVc] = useState<string | null>(null)
   const [copiedVc, setCopiedVc] = useState(false)
+
   const load = useCallback(() => {
     setSigners(listLocalSigners())
+    setPending(listPendingSigners())
   }, [])
 
   useEffect(() => {
@@ -120,7 +122,6 @@ export function SignersPage() {
       notice('Enter a signer name')
       return
     }
-    setShowCreate('none')
     const push = (message: string) =>
       setCreating((c) => (c ? { ...c, progress: [...c.progress, message] } : c))
     setCreating({ name, progress: ['Generating a W3C DID key in this browser…'] })
@@ -142,9 +143,9 @@ export function SignersPage() {
             credential: job.result!.credential,
             slotId: job.result!.slotId,
           }
-          localStorage.setItem(walletKey(name), JSON.stringify(wallet))
+          localStorage.setItem(pendingKey(name), JSON.stringify(wallet))
           setCreating(null)
-          notice(`Signer ${name} created with a remote W3C DID wallet.`)
+          notice(`Signer ${name} created. Now issue its credential from step 3.`)
           load()
           return
         }
@@ -162,6 +163,9 @@ export function SignersPage() {
 
   async function issueVc(name: string) {
     setIssuingVc(name)
+    promotePendingSigner(name)
+    setPending(listPendingSigners())
+    setSigners(listLocalSigners())
     try {
       const offer = await api<IssueVcResult>(`/signers/${name}/issue-vc`, {})
       setVcOffer({ name, offer })
@@ -183,118 +187,166 @@ export function SignersPage() {
     }
   }
 
+  const step3Signers: LocalSigner[] = [...pending]
+  if (vcOffer && !step3Signers.some((s) => s.name === vcOffer.name)) {
+    const offered = signers.find((s) => s.name === vcOffer.name)
+    if (offered) step3Signers.push(offered)
+  }
+
   return (
     <div className="signers">
-      <div className="eyebrow">Signers</div>
-      <h1>Known signers.</h1>
+      <div className="eyebrow">Signing keys</div>
+      <h1>Add a signer.</h1>
       <p className="sub">
         Each signer holds a dedicated on-chain key slot gated by a credential rule
         (DCQL). Only the matching demo credential can authorize a signature.
       </p>
 
       <section className="panel create-signer">
-        {showCreate === 'none' ? (
-          <div className="actions">
-            <button className="primary" onClick={() => setShowCreate('signer')}>
-              Create signer
-            </button>
+        <h2>Create a signer</h2>
+
+        <div className="send-step">
+          <div className="send-step-head">
+            <span className="send-step-num" aria-hidden="true">
+              1
+            </span>
+            <div>
+              <h3 className="send-step-title">Create the signer</h3>
+              <p className="send-step-sub">
+                Name your signer and generate its on-chain key slot.
+              </p>
+            </div>
           </div>
-        ) : (
           <form
             onSubmit={(e) => {
               e.preventDefault()
               void startCreation(newName)
             }}
           >
-            <label htmlFor="new-signer-name">Signer name</label>
             <div className="row">
               <input
                 id="new-signer-name"
                 type="text"
                 value={newName}
                 maxLength={32}
-                autoFocus
                 placeholder="e.g. carol"
                 onChange={(e) => setNewName(e.target.value)}
               />
               <button
                 className="primary"
                 type="submit"
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || !!creating}
               >
                 Create
               </button>
             </div>
-            <div className="wallet-callout">
-              <p className="hint">
-                A signer keeps its DocumentSigner credential in an external wallet.
-                Open the demo wallet first, then name and create the signer below.
-              </p>
-              <DemoWalletLink className="button">
-                Open the demo wallet ↗
-              </DemoWalletLink>
-            </div>
-            <div className="form-cancel">
-              <button
-                className="small"
-                type="button"
-                onClick={() => setShowCreate('none')}
-              >
-                Cancel
-              </button>
-            </div>
           </form>
-        )}
+        </div>
+
+        <div className="send-step">
+          <div className="send-step-head">
+            <span className="send-step-num" aria-hidden="true">
+              2
+            </span>
+            <div>
+              <h3 className="send-step-title">Access the demo wallet</h3>
+              <p className="send-step-sub">
+                Open the demo wallet on your mobile device and create an identity if
+                you haven’t already.
+              </p>
+            </div>
+          </div>
+          <DemoWalletLink className="button">
+            Open the demo wallet on mobile ↗
+          </DemoWalletLink>
+        </div>
+
+        <div className="send-step">
+          <div className="send-step-head">
+            <span className="send-step-num" aria-hidden="true">
+              3
+            </span>
+            <div>
+              <h3 className="send-step-title">Issue the VC & scan it</h3>
+              <p className="send-step-sub">
+                Issue the credential, then scan the QR with your mobile wallet.
+              </p>
+            </div>
+          </div>
+          {step3Signers.length ? (
+            step3Signers.map((p) => (
+              <div className="issue-box" key={p.name}>
+                <div className="person">
+                  <div className="avatar">{name(p.name)[0]}</div>
+                  <div>
+                    <p>{name(p.name)}</p>
+                    <small>{shortSlot(p.slotId)}</small>
+                  </div>
+                </div>
+                <button
+                  className="small"
+                  disabled={issuingVc === p.name}
+                  onClick={() => void issueVc(p.name)}
+                >
+                  {issuingVc === p.name
+                    ? 'Creating QR…'
+                    : vcOffer?.name === p.name
+                      ? 'Regenerate QR'
+                      : 'Issue VC'}
+                </button>
+                {vcOffer?.name === p.name ? (
+                  <div className="vc-offer">
+                    <img
+                      src={vcOffer.offer.qrDataUrl}
+                      alt="Credential offer QR code"
+                      width={200}
+                      height={200}
+                    />
+                    <p className="hint">
+                      Scan with a remote wallet to receive this signer’s
+                      DocumentSigner credential. Offer expires in 15 minutes.
+                    </p>
+                    <div className="linkbox">
+                      <small>{vcOffer.offer.offerUri}</small>
+                    </div>
+                    <button className="small" type="button" onClick={() => void copyVc()}>
+                      {copiedVc ? 'Copied' : 'Copy URL'}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ))
+          ) : (
+            <p className="hint">Create a signer in step 1 to issue its credential.</p>
+          )}
+        </div>
       </section>
 
-      {signers.map((s) => (
-        <section className="panel" key={s.name}>
-          <div className="person">
-            <div className="avatar">{name(s.name)[0]}</div>
-            <div>
-              <p>{name(s.name)}</p>
-              <small>
-                DocumentSigner · did:demo:{s.name}
-              </small>
-            </div>
-          </div>
-          <WalletUpload person={s.name} />
-          <h3>Key slot</h3>
-          <div className="linkbox">
-            <a href={explorer(s.slotId)} target="_blank" rel="noopener noreferrer">
-              {s.slotId}
-            </a>
-          </div>
-          <h3>Issue VC</h3>
-          <button
-            className="small"
-            disabled={issuingVc === s.name}
-            onClick={() => void issueVc(s.name)}
-          >
-            {issuingVc === s.name ? 'Creating QR…' : 'Issue VC'}
-          </button>
-          {vcOffer?.name === s.name ? (
-            <div className="vc-offer">
-              <img
-                src={vcOffer.offer.qrDataUrl}
-                alt="Credential offer QR code"
-                width={200}
-                height={200}
-              />
-              <p className="hint">
-                Scan with a remote wallet to receive this signer’s DocumentSigner
-                credential. Offer expires in 15 minutes.
-              </p>
-              <div className="linkbox">
-                <small>{vcOffer.offer.offerUri}</small>
+      {signers.length ? (
+        <>
+          <h2>Your signers</h2>
+          {signers.map((s) => (
+            <section className="panel" key={s.name}>
+              <div className="person">
+                <div className="avatar">{name(s.name)[0]}</div>
+                <div>
+                  <p>{name(s.name)}</p>
+                  <small>DocumentSigner · did:demo:{s.name}</small>
+                </div>
               </div>
-              <button className="small" type="button" onClick={() => void copyVc()}>
-                {copiedVc ? 'Copied' : 'Copy URL'}
-              </button>
-            </div>
-          ) : null}
-        </section>
-      ))}
+              <WalletUpload person={s.name} />
+              <h3>Key slot</h3>
+              <div className="linkbox">
+                <a href={explorer(s.slotId)} target="_blank" rel="noopener noreferrer">
+                  {s.slotId}
+                </a>
+              </div>
+            </section>
+          ))}
+        </>
+      ) : (
+        <p className="empty">No signers yet. Create one above.</p>
+      )}
 
       {creating ? (
         <div className="overlay" role="dialog" aria-modal="true">

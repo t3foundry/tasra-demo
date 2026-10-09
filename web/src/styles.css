@@ -536,25 +536,110 @@ input[type='checkbox'] {
   color: var(--danger);
 }
 .request {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  gap: 15px;
-  padding: 18px 0;
   border-top: 1px solid var(--line);
+  padding: 18px 0;
 }
 .request:first-of-type {
-  border: 0;
+  border-top: 0;
+  padding-top: 0;
 }
-.request strong {
+.request-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+}
+.request-title {
   font-weight: 600;
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+}
+.request-meta {
+  color: var(--muted);
+  font-size: 12px;
 }
 .request-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  flex-wrap: wrap;
+}
+.signer-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.signer-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid;
+}
+.signer-stamp::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.signer-stamp.signed {
+  color: #1e7a4a;
+  background: var(--success-soft);
+  border-color: var(--success-line);
+}
+.signer-stamp.pending {
+  color: #8a4d00;
+  background: var(--warn-soft);
+  border-color: var(--warn-line);
+}
+.signer-stamp.refused {
+  color: #c0392b;
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+}
+.request-details {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 22px;
+  animation: request-reveal 0.22s ease both;
+}
+.request-details-body {
+  min-width: 0;
+}
+.request-details .panel {
+  margin-top: 0;
+}
+@keyframes request-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 850px) {
+  .request-details {
+    grid-template-columns: 1fr;
+  }
+  .request-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .request-actions {
+    justify-content: flex-start;
+  }
 }
 .status-pill {
   font-size: 11px;
@@ -577,10 +662,6 @@ input[type='checkbox'] {
   color: #c0392b;
   background: var(--danger-soft);
   border-color: var(--danger-line);
-}
-.request small {
-  color: var(--muted);
-  font-size: 12px;
 }
 .linkbox {
   word-break: break-all;
@@ -666,6 +747,70 @@ input[type='checkbox'] {
     monospace;
   overflow-wrap: anywhere;
   color: var(--muted);
+}
+.send-step-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.send-step-num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand-deep);
+  color: #fff;
+  font: 700 12px ui-monospace, monospace;
+}
+.send-step-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.send-step-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.send-step {
+  padding: 0 0 22px;
+}
+.send-step + .send-step {
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.send-step .field:last-child,
+.send-step .drop {
+  margin-bottom: 0;
+}
+.send-step-foot {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  padding-bottom: 0;
+}
+.send-step-foot .hint {
+  margin: 0;
+}
+.issue-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: var(--offwhite);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.issue-box .person {
+  margin: 0;
+}
+.issue-box .button,
+.issue-box .vc-offer {
+  justify-self: start;
 }
 #notice {
   position: fixed;

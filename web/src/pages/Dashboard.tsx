@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
-import { digest, type PublicRequest } from '../../../shared/model'
+import { digest, type PublicRequest, type SignerState } from '../../../shared/model'
 import { useNotice } from '../notice'
-import { Badge, Recipients, Timeline, Downloads, name, shortSlot } from '../components'
+import {
+  Recipients,
+  Timeline,
+  Downloads,
+  name,
+  shortSlot,
+  signerLabel,
+} from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
 import { listLocalSigners } from '../localSigners'
 
@@ -16,12 +23,22 @@ const requestStatus: Record<PublicRequest['status'], string> = {
   declined: 'Declined',
 }
 
+function createdMs(r: PublicRequest): number {
+  const first = r.history[0]
+  return first ? new Date(first.at).getTime() : 0
+}
+
+function signerStatus(s: SignerState): 'signed' | 'refused' | 'pending' {
+  if (s.signature || s.phase === 'signed') return 'signed'
+  if (s.phase === 'refused') return 'refused'
+  return 'pending'
+}
+
 export function Dashboard() {
   const notice = useNotice()
   const [list, setList] = useState<PublicRequest[]>([])
-  const [selected, setSelected] = useState<PublicRequest>()
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [version, setVersion] = useState('')
   const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [busy, setBusy] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
@@ -29,10 +46,11 @@ export function Dashboard() {
 
   const load = useCallback(async () => {
     const l = await api<PublicRequest[]>('/requests')
-    setList(l)
-    setSelected((prev) => {
+    const sorted = [...l].sort((a, b) => createdMs(b) - createdMs(a))
+    setList(sorted)
+    setExpandedId((prev) => {
       if (!prev) return prev
-      return l.find((r) => r.manifest.requestId === prev.manifest.requestId) ?? prev
+      return sorted.some((r) => r.manifest.requestId === prev) ? prev : null
     })
   }, [])
 
@@ -52,6 +70,10 @@ export function Dashboard() {
     )
   }
 
+  function toggleRequest(id: string) {
+    setExpandedId((prev) => (prev === id ? null : id))
+  }
+
   async function send() {
     setBusy(true)
     try {
@@ -61,7 +83,6 @@ export function Dashboard() {
       const fingerprint = JSON.stringify({
         hash: await digest(upload),
         title,
-        version,
         signers: [...selectedSlots].sort(),
       })
       const pending = JSON.parse(
@@ -80,12 +101,12 @@ export function Dashboard() {
       const created = await api<PublicRequest>('/requests', {
         id,
         title,
-        version: Number(version),
+        version: 1,
         pdfBase64: base64(upload),
         signers,
       })
       sessionStorage.removeItem('pending-request')
-      setSelected(created)
+      setExpandedId(created.manifest.requestId)
       notice('Request created. Share each signer’s invitation.')
       await load()
     } catch (e) {
@@ -107,33 +128,30 @@ export function Dashboard() {
           </p>
         </div>
       </div>
-      <div className="grid">
-        <div className="stack">
-          <section className="panel">
-            <h2>Send a document</h2>
-            <div className="row">
-              <div className="field">
-                <label htmlFor="title">Document title</label>
-                <input
-                  id="title"
-                  type="text"
-                  value={title}
-                  maxLength={120}
-                  placeholder="e.g. Consulting agreement"
-                  onChange={(e) => setTitle(e.target.value)}
-                />
+      <div className="stack">
+        <section className="panel">
+          <h2>Send a document</h2>
+
+          <div className="send-step">
+            <div className="send-step-head">
+              <span className="send-step-num" aria-hidden="true">
+                1
+              </span>
+              <div>
+                <h3 className="send-step-title">Name & attach</h3>
+                <p className="send-step-sub">Give the document a title and add its PDF.</p>
               </div>
-              <div className="field">
-                <label htmlFor="version">Version</label>
-                <input
-                  id="version"
-                  type="number"
-                  value={version}
-                  min={1}
-                  placeholder="e.g. 1"
-                  onChange={(e) => setVersion(e.target.value)}
-                />
-              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="title">Document title</label>
+              <input
+                id="title"
+                type="text"
+                value={title}
+                maxLength={120}
+                placeholder="e.g. Consulting agreement"
+                onChange={(e) => setTitle(e.target.value)}
+              />
             </div>
             <FileUpload
               file={pdf}
@@ -146,6 +164,18 @@ export function Dashboard() {
               sampleLabel="Use sample PDF"
               sampleHint="Or start with the included sample agreement."
             />
+          </div>
+
+          <div className="send-step">
+            <div className="send-step-head">
+              <span className="send-step-num" aria-hidden="true">
+                2
+              </span>
+              <div>
+                <h3 className="send-step-title">Configure & assign</h3>
+                <p className="send-step-sub">Choose who signs and who else receives a copy.</p>
+              </div>
+            </div>
             <div className="field">
               <label>Signatures</label>
               {allSlots.length ? (
@@ -180,111 +210,138 @@ export function Dashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="send-step send-step-foot">
             <p className="hint">
-              Sending freezes the PDF, version and the selected signatures.
+              Sending freezes the PDF and the selected signatures.
             </p>
             <button
               className="primary"
               disabled={
-                busy ||
-                !title.trim() ||
-                !version.trim() ||
-                !pdf ||
-                selectedSlots.length === 0
+                busy || !title.trim() || !pdf || selectedSlots.length === 0
               }
               onClick={send}
             >
               Create signing request
             </button>
-          </section>
+          </div>
+        </section>
 
-          <section className="panel">
-            <h2>Your requests</h2>
-            {list.length ? (
-              list.map((r) => (
+        <section className="panel">
+          <h2>Signing Requests</h2>
+          {list.length ? (
+            list.map((r) => {
+              const expanded = expandedId === r.manifest.requestId
+              const signed = r.signers.filter(
+                (s) => signerStatus(s) === 'signed',
+              ).length
+              return (
                 <div className="request" key={r.manifest.requestId}>
-                  <div>
-                    <strong>{r.manifest.title}</strong>
-                    <small>
-                      Version {r.manifest.version} · {r.manifest.requestId.slice(0, 8)}
-                    </small>
-                  </div>
-                  <div className="request-actions">
-                    <span className={'status-pill ' + r.status}>
-                      {requestStatus[r.status]}
-                    </span>
-                    {r.status === 'completed' ? (
-                      <a
-                        className="button small"
-                        href={`/api/requests/${r.manifest.requestId}/bundle.zip`}
+                  <div className="request-row">
+                    <div>
+                      <strong className="request-title">{r.manifest.title}</strong>
+                      <small className="request-meta">
+                        {r.signers.length} signer{r.signers.length === 1 ? '' : 's'} ·{' '}
+                        {signed} of {r.signers.length} signed ·{' '}
+                        {r.manifest.requestId.slice(0, 8)}
+                      </small>
+                      <div className="signer-stamps">
+                        {r.signers.map((s) => (
+                          <span
+                            key={s.slotId}
+                            className={'signer-stamp ' + signerStatus(s)}
+                          >
+                            {signerLabel(s)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="request-actions">
+                      <span className={'status-pill ' + r.status}>
+                        {requestStatus[r.status]}
+                      </span>
+                      {r.status === 'completed' ? (
+                        <a
+                          className="button small"
+                          href={`/api/requests/${r.manifest.requestId}/bundle.zip`}
+                        >
+                          Download Bundle
+                        </a>
+                      ) : null}
+                      <button
+                        className="small"
+                        aria-expanded={expanded}
+                        onClick={() => toggleRequest(r.manifest.requestId)}
                       >
-                        Download Bundle
-                      </a>
-                    ) : null}
-                    <button className="small" onClick={() => setSelected(r)}>
-                      {r.status === 'completed' ? 'View' : 'Review'}
-                    </button>
+                        {expanded
+                          ? 'Hide'
+                          : r.status === 'completed'
+                            ? 'View'
+                            : 'Review'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              <p className="empty">Your first request will appear here.</p>
-            )}
-          </section>
-        </div>
 
-        <aside className="side stack">
-          {selected ? (
-            <>
-              <section className="panel">
-                <h2>{selected.manifest.title}</h2>
-                <Badge status={selected.status} />
-                <Recipients r={selected} />
-                {selected.manifest.signers.map((s) => (
-                  <div key={s.slotId}>
-                    <h3>
-                      <a
-                        href={`/sign/${selected.manifest.requestId}/${s.slotId}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {s.name ? name(s.name) : shortSlot(s.slotId)}’s invitation ↗
-                      </a>
-                    </h3>
-                    <button
-                      className="small"
-                      onClick={async () => {
-                        await navigator.clipboard.writeText(
-                          `${location.origin}/sign/${selected.manifest.requestId}/${s.slotId}`,
-                        )
-                        notice('Invitation copied')
-                      }}
-                    >
-                      Copy {s.name ? name(s.name) : 'signer'}’s link
-                    </button>
-                    <div className="divider"></div>
-                  </div>
-                ))}
-                <Downloads r={selected} />
-                {selected.status === 'awaiting' ? (
-                  <>
-                    <div className="divider"></div>
-                    <button
-                      className="small"
-                      onClick={async () => {
-                        await api(`/requests/${selected.manifest.requestId}/cancel`, {})
-                        await load()
-                      }}
-                    >
-                      Cancel request
-                    </button>
-                  </>
-                ) : null}
-              </section>
-              <Timeline r={selected} />
-            </>
-          ) : null}
-        </aside>
+                  {expanded ? (
+                    <div className="request-details">
+                      <div className="request-details-body">
+                        <Recipients r={r} />
+                        <div className="divider"></div>
+                        {r.manifest.signers.map((s) => (
+                          <div key={s.slotId}>
+                            <h3>
+                              <a
+                                href={`/sign/${r.manifest.requestId}/${s.slotId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {s.name ? name(s.name) : shortSlot(s.slotId)}’s invitation ↗
+                              </a>
+                            </h3>
+                            <button
+                              className="small"
+                              onClick={async () => {
+                                await navigator.clipboard.writeText(
+                                  `${location.origin}/sign/${r.manifest.requestId}/${s.slotId}`,
+                                )
+                                notice('Invitation copied')
+                              }}
+                            >
+                              Copy {s.name ? name(s.name) : 'signer'}’s link
+                            </button>
+                            <div className="divider"></div>
+                          </div>
+                        ))}
+                        <Downloads r={r} />
+                        {r.status === 'awaiting' ? (
+                          <>
+                            <div className="divider"></div>
+                            <button
+                              className="small"
+                              onClick={async () => {
+                                await api(
+                                  `/requests/${r.manifest.requestId}/cancel`,
+                                  {},
+                                )
+                                await load()
+                              }}
+                            >
+                              Cancel request
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                      <Timeline r={r} />
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })
+          ) : (
+            <p className="empty">Your first request will appear here.</p>
+          )}
+        </section>
       </div>
     </>
   )

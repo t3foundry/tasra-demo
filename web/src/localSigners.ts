@@ -1,12 +1,16 @@
 export type LocalSigner = { name: string; slotId: string }
 
-export const walletKey = (person: string) => `tasra-wallet:${person}`
+const walletPrefix = 'tasra-wallet:'
+const pendingPrefix = 'tasra-pending:'
 
-export function listLocalSigners(): LocalSigner[] {
+export const walletKey = (person: string) => walletPrefix + person
+export const pendingKey = (person: string) => pendingPrefix + person
+
+function readSigners(prefix: string): LocalSigner[] {
   const signers: LocalSigner[] = []
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i)
-    if (!key || !key.startsWith('tasra-wallet:')) continue
+    if (!key || !key.startsWith(prefix)) continue
     const raw = localStorage.getItem(key)
     if (!raw) continue
     try {
@@ -22,4 +26,19 @@ export function listLocalSigners(): LocalSigner[] {
     }
   }
   return signers
+}
+
+export function listLocalSigners(): LocalSigner[] {
+  return readSigners(walletPrefix)
+}
+
+export function listPendingSigners(): LocalSigner[] {
+  return readSigners(pendingPrefix)
+}
+
+export function promotePendingSigner(name: string) {
+  const raw = localStorage.getItem(pendingKey(name))
+  if (!raw) return
+  localStorage.setItem(walletKey(name), raw)
+  localStorage.removeItem(pendingKey(name))
 }
