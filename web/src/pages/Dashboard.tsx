@@ -6,6 +6,7 @@ import { useNotice } from '../notice'
 import { Downloads, name, shortSlot, signerLabel } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
 import { listLocalSigners } from '../localSigners'
+import { listLocalRequestIds, rememberRequest } from '../localRequests'
 
 type KeySlotOption = { slotId: string; name?: string }
 
@@ -39,8 +40,11 @@ export function Dashboard() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
 
   const load = useCallback(async () => {
+    const local = new Set(listLocalRequestIds())
     const l = await api<PublicRequest[]>('/requests')
-    const sorted = [...l].sort((a, b) => createdMs(b) - createdMs(a))
+    const sorted = [...l]
+      .filter((r) => local.has(r.manifest.requestId))
+      .sort((a, b) => createdMs(b) - createdMs(a))
     setList(sorted)
     setExpandedId((prev) => {
       if (!prev) return prev
@@ -50,6 +54,10 @@ export function Dashboard() {
 
   useEffect(() => {
     void load().catch((e) => notice(e.message, 'error'))
+    const id = setInterval(() => {
+      void load().catch((e) => notice(e.message, 'error'))
+    }, 10_000)
+    return () => clearInterval(id)
   }, [load, notice])
 
   useEffect(() => {
@@ -100,6 +108,7 @@ export function Dashboard() {
         signers,
       })
       sessionStorage.removeItem('pending-request')
+      rememberRequest(created.manifest.requestId)
       setExpandedId(created.manifest.requestId)
       setTitle('')
       setPdf(null)
@@ -126,7 +135,8 @@ export function Dashboard() {
           </p>
         </div>
       </div>
-      <div className="stack">
+      <div className="grid">
+        <div className="stack">
         <section className="panel">
           <div className="send-head">
             <h2>Send a document</h2>
@@ -400,6 +410,24 @@ export function Dashboard() {
             <p className="empty">Your first request will appear here.</p>
           )}
         </section>
+        </div>
+
+        <aside className="side stack">
+          <div className="demo-head">
+            <h3>Get a document signed</h3>
+            <p>
+              Here's a scenario — try to replicate it with the demo: send a document for
+              signatures and track each approval.
+            </p>
+          </div>
+          <video
+            className="demo-video"
+            controls
+            playsInline
+            preload="metadata"
+            src="https://s3.eu-west-1.filonecontent.com/tasra-videos/department-signing.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=G53R2Y4SV19KXEM3K4K6%2F20261010%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T135600Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=9afa35d8962316dc434e9a6af0c6d40a3a39b23561f124798bc839c4327e001a"
+          />
+        </aside>
       </div>
     </>
   )

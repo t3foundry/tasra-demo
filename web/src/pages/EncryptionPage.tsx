@@ -109,7 +109,8 @@ export function EncryptionPage() {
           </p>
         </div>
       </div>
-      <div className="stack">
+      <div className="grid">
+        <div className="stack">
         <section className="panel">
           <h2>Encrypt a document</h2>
 
@@ -233,6 +234,24 @@ export function EncryptionPage() {
             <p className="empty">Your first encrypted document will appear here.</p>
           )}
         </section>
+        </div>
+
+        <aside className="side stack">
+          <div className="demo-head">
+            <h3>Send an encrypted attachment</h3>
+            <p>
+              Here's a scenario — try to replicate it with the demo: send a confidential
+              PDF by email so only the intended recipient can open it.
+            </p>
+          </div>
+          <video
+            className="vertical-video"
+            controls
+            playsInline
+            preload="metadata"
+            src="https://s3.eu-west-1.filonecontent.com/tasra-videos/send-encrypted-email-attachment.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=G53R2Y4SV19KXEM3K4K6%2F20261010%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T134521Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=a050b0f6aabd6cb05d927c250a0ba10382f7e959df876ee4e4800095daa2cfcf"
+          />
+        </aside>
       </div>
     </>
   )
