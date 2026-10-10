@@ -189,7 +189,7 @@ export function Dashboard() {
               </div>
             </div>
             <div className="field">
-              <label>Signatures</label>
+              <label>Signers</label>
               {allSlots.length ? (
                 <>
                   <div className="signer-list">
@@ -210,14 +210,14 @@ export function Dashboard() {
                     ))}
                   </div>
                   <Link className="new-signature-link" to="/signers">
-                    + Create a new signature
+                    + Create a new signer
                   </Link>
                 </>
               ) : (
                 <div className="no-signatures">
-                  <p>No signatures yet. Create one to start signing documents.</p>
+                  <p>No signers yet. Create one to start signing documents.</p>
                   <Link className="button small" to="/signers">
-                    Create a new signature
+                    Create a new signer
                   </Link>
                 </div>
               )}
@@ -226,7 +226,7 @@ export function Dashboard() {
 
           <div className="send-step send-step-foot">
             <p className="hint">
-              Sending freezes the PDF and the selected signatures.
+              Sending freezes the PDF and the selected signers.
             </p>
             <button
               className="primary"
