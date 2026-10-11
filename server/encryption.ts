@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { hexToBytes, type IbeCiphertext } from 'tasra-sdk'
 import {
   openVerifierAgentSession,
@@ -53,7 +54,9 @@ export async function createEncryptionSlot(
     let last = ''
     const slot = await tasra.slots.create(
       {
-        name: 'encrypted-' + name,
+        // Unique recovery name so a reused key name mints a fresh slot instead of
+        // resuming the previous creation journal.
+        name: `encrypted-${name}-${randomUUID()}`,
         mode: 'bls',
         policy,
         threshold: { k: 2, n: 3 },

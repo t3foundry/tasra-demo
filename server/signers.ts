@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { hexToBytes } from 'tasra-sdk'
 import { issueSdJwtVc, ed25519FromDidKey, type Jwk } from 'tasra-sdk/oid4vp'
@@ -147,9 +148,12 @@ export async function createSignerSlot(
   })
   try {
     let last = ''
+    // The slot recovery name doubles as the SDK's durable creation-journal key, so it
+    // must be unique per creation. Reusing the signer's name would resume the old journal
+    // and hand back the same slot instead of minting a fresh key slot.
     const slot = await tasra.slots.create(
       {
-        name: 'document-' + name,
+        name: `document-${name}-${randomUUID()}`,
         mode: 'frost',
         policy,
         threshold: { k: 2, n: 3 },
