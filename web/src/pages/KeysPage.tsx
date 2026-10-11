@@ -1,13 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api'
-import { shortSlot } from '../components'
 import { DemoWalletLink } from '../DemoWalletLink'
 import { useNotice } from '../notice'
 import {
   listLocalEncryptionKeys,
-  listPendingLocalEncryptionKeys,
-  promotePendingEncryptionKey,
-  savePendingLocalEncryptionKey,
+  saveLocalEncryptionKey,
   type LocalEncryptionKey,
 } from '../localEncryptionKeys'
 
@@ -28,11 +25,11 @@ const explorer = (slotId: string) =>
 export function KeysPage() {
   const notice = useNotice()
   const [keys, setKeys] = useState<LocalEncryptionKey[]>([])
-  const [pending, setPending] = useState<LocalEncryptionKey[]>([])
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState<{
     name: string
     progress: string[]
+    done?: boolean
   } | null>(null)
   const [vcOffer, setVcOffer] = useState<{ name: string; offer: IssueVcResult } | null>(null)
   const [issuingVc, setIssuingVc] = useState<string | null>(null)
@@ -40,7 +37,6 @@ export function KeysPage() {
 
   const load = useCallback(() => {
     setKeys(listLocalEncryptionKeys())
-    setPending(listPendingLocalEncryptionKeys())
   }, [])
 
   useEffect(() => {
@@ -61,12 +57,13 @@ export function KeysPage() {
       for (let i = 0; i < 1200; i++) {
         const job = await api<EncryptionKeyJob>('/encryption/keys/jobs/' + jobId)
         if (job.status === 'completed') {
-          savePendingLocalEncryptionKey({
+          saveLocalEncryptionKey({
             name: job.result!.name,
             slotId: job.result!.slotId,
           })
-          setCreating(null)
-          notice(`Key ${name} created. Now issue its credential from step 3.`, 'success')
+          setCreating((c) => (c ? { ...c, progress: job.progress, done: true } : c))
+          setNewName('')
+          notice(`Key ${name} created.`, 'success')
           load()
           return
         }
@@ -84,9 +81,6 @@ export function KeysPage() {
 
   async function issueVc(name: string) {
     setIssuingVc(name)
-    promotePendingEncryptionKey(name)
-    setPending(listPendingLocalEncryptionKeys())
-    setKeys(listLocalEncryptionKeys())
     try {
       const offer = await api<IssueVcResult>(
         `/encryption/keys/${encodeURIComponent(name)}/issue-vc`,
@@ -192,52 +186,10 @@ export function KeysPage() {
               </p>
             </div>
           </div>
-          {pending.length ? (
-            pending.map((k) => (
-              <div className="issue-box" key={k.name}>
-                <div className="person">
-                  <div className="avatar">{k.name[0]}</div>
-                  <div>
-                    <p>{k.name}</p>
-                    <small>{shortSlot(k.slotId)}</small>
-                  </div>
-                </div>
-                <button
-                  className="small"
-                  disabled={issuingVc === k.name}
-                  onClick={() => void issueVc(k.name)}
-                >
-                  {issuingVc === k.name
-                    ? 'Creating QR…'
-                    : vcOffer?.name === k.name
-                      ? 'Regenerate QR'
-                      : 'Issue VC'}
-                </button>
-                {vcOffer?.name === k.name ? (
-                  <div className="vc-offer">
-                    <img
-                      src={vcOffer.offer.qrDataUrl}
-                      alt="Credential offer QR code"
-                      width={200}
-                      height={200}
-                    />
-                    <p className="hint">
-                      Scan with a remote wallet to receive this key’s DocumentReader
-                      credential. Offer expires in 30 minutes.
-                    </p>
-                    <div className="linkbox">
-                      <small>{vcOffer.offer.offerUri}</small>
-                    </div>
-                    <button className="small" type="button" onClick={() => void copyVc()}>
-                      {copiedVc ? 'Copied' : 'Copy URL'}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ))
-          ) : (
-            <p className="hint">Create a key in step 1 to issue its credential.</p>
-          )}
+          <p className="hint">
+            Once your key appears below, click its “Issue VC” button to generate the
+            credential QR for your mobile wallet.
+          </p>
         </div>
       </section>
 
@@ -307,6 +259,11 @@ export function KeysPage() {
               ))}
             </ol>
             <p className="hint">This can take a minute or two. Do not close this page.</p>
+            {creating.done ? (
+              <button className="primary" type="button" onClick={() => setCreating(null)}>
+                Dismiss
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

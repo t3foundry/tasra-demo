@@ -37,6 +37,7 @@ export function SignersPage() {
   const [creating, setCreating] = useState<{
     name: string
     progress: string[]
+    done?: boolean
   } | null>(null)
   const [vcOffer, setVcOffer] = useState<{ name: string; offer: IssueVcResult } | null>(null)
   const [issuingVc, setIssuingVc] = useState<string | null>(null)
@@ -79,7 +80,8 @@ export function SignersPage() {
             slotId: job.result!.slotId,
           }
           localStorage.setItem(pendingKey(name), JSON.stringify(wallet))
-          setCreating(null)
+          setCreating((c) => (c ? { ...c, progress: job.progress, done: true } : c))
+          setNewName('')
           notice(`Signer ${name} created. Now issue its credential from step 3.`, 'success')
           load()
           return
@@ -209,7 +211,9 @@ export function SignersPage() {
                   <div className="avatar">{name(p.name)[0]}</div>
                   <div>
                     <p>{name(p.name)}</p>
-                    <small>{shortSlot(p.slotId)}</small>
+                    <a href={explorer(p.slotId)} target="_blank" rel="noopener noreferrer">
+                      {shortSlot(p.slotId)}
+                    </a>
                   </div>
                 </div>
                 <button
@@ -317,6 +321,11 @@ export function SignersPage() {
               ))}
             </ol>
             <p className="hint">This can take a minute or two. Do not close this page.</p>
+            {creating.done ? (
+              <button className="primary" type="button" onClick={() => setCreating(null)}>
+                Dismiss
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

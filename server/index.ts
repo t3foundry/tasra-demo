@@ -5,6 +5,10 @@ import { createApp } from './app'
 import { loadService } from './backend'
 import { lockDirectory, stateDirectory } from './store'
 
+// Load local secrets from the git-ignored `.env` file when present.
+const envPath = join(import.meta.dirname, '..', '.env')
+if (existsSync(envPath)) process.loadEnvFile(envPath)
+
 const port = Number(process.env.PORT ?? 4177)
 if (!Number.isSafeInteger(port) || port < 1024 || port > 65535)
   throw new Error('Invalid PORT')

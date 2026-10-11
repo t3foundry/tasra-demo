@@ -191,6 +191,9 @@ p {
 .route-signers {
   --accent: var(--brand);
 }
+.route-signers .person p {
+  font-size: 16px;
+}
 .route-verify {
   --accent: var(--success);
 }

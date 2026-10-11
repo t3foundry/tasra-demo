@@ -7,6 +7,7 @@ import { Downloads, name, shortSlot, signerLabel } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
 import { listLocalSigners } from '../localSigners'
 import { listLocalRequestIds, rememberRequest } from '../localRequests'
+import { useDemoVideoUrl } from '../videos'
 
 type KeySlotOption = { slotId: string; name?: string }
 
@@ -38,6 +39,7 @@ export function Dashboard() {
   const [sendCollapsed, setSendCollapsed] = useState(false)
   const [allSlots, setAllSlots] = useState<KeySlotOption[]>([])
   const [selectedSlots, setSelectedSlots] = useState<string[]>([])
+  const demoVideoUrl = useDemoVideoUrl('department-signing')
 
   const load = useCallback(async () => {
     const local = new Set(listLocalRequestIds())
@@ -425,7 +427,7 @@ export function Dashboard() {
             controls
             playsInline
             preload="metadata"
-            src="https://s3.eu-west-1.filonecontent.com/tasra-videos/department-signing.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=G53R2Y4SV19KXEM3K4K6%2F20261010%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T194005Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=d98400556bcd7c5001c90a209c2cdd8d9b14757528064e20a2c98253c7a927fd"
+            src={demoVideoUrl}
           />
         </aside>
       </div>

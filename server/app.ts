@@ -41,6 +41,7 @@ import {
   decryptDocument,
   type DecryptSession,
 } from './encryption'
+import { demoVideoUrls } from './videos'
 
 export type AppContext = { Variables: NonNullable<unknown> }
 
@@ -233,6 +234,9 @@ export function createApp() {
     if (!job) throw new Conflict('Unknown remote signer creation job')
     return c.json(job)
   })
+
+  // Demo videos: presigned S3 URLs generated server-side (credentials stay private).
+  app.get('/api/videos', (c) => c.json(demoVideoUrls()))
 
   // Encryption: BLS identity-encryption key slots and document encryption.
   type EncryptionKeyJob = {

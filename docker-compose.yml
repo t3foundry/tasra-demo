@@ -31,6 +31,9 @@ services:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
       # Set to 1 to honor X-Forwarded-* from a trusted proxy; prefer PUBLIC_ORIGIN.
       TRUST_PROXY: ${TRUST_PROXY:-}
+      # S3 credentials for signing the demo-video URLs (never served to clients).
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       # Bind address and port are already set by the image (0.0.0.0:4177).
     volumes:
       # Persistent, private state: wallets, requests, SDK journals, writer lock.

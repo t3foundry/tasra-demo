@@ -1,7 +1,9 @@
 export type LocalEncryptionKey = { name: string; slotId: string }
 
 const storageKey = 'tasra-encryption-keys'
-const pendingKey = 'tasra-encryption-keys-pending'
+// Legacy store kept so keys created before the pending/issued split was removed
+// still show up in the same list.
+const legacyPendingKey = 'tasra-encryption-keys-pending'
 
 function readKeys(storage: string): LocalEncryptionKey[] {
   try {
@@ -23,34 +25,18 @@ function readKeys(storage: string): LocalEncryptionKey[] {
 }
 
 export function listLocalEncryptionKeys(): LocalEncryptionKey[] {
-  return readKeys(storageKey)
-}
-
-export function listPendingLocalEncryptionKeys(): LocalEncryptionKey[] {
-  return readKeys(pendingKey)
+  const keys: LocalEncryptionKey[] = []
+  const seen = new Set<string>()
+  for (const entry of [...readKeys(storageKey), ...readKeys(legacyPendingKey)]) {
+    if (seen.has(entry.name)) continue
+    seen.add(entry.name)
+    keys.push(entry)
+  }
+  return keys
 }
 
 export function saveLocalEncryptionKey(record: LocalEncryptionKey): void {
   const keys = listLocalEncryptionKeys().filter((k) => k.name !== record.name)
   keys.push(record)
   localStorage.setItem(storageKey, JSON.stringify(keys))
-}
-
-export function savePendingLocalEncryptionKey(record: LocalEncryptionKey): void {
-  const keys = listPendingLocalEncryptionKeys().filter(
-    (k) => k.name !== record.name,
-  )
-  keys.push(record)
-  localStorage.setItem(pendingKey, JSON.stringify(keys))
-}
-
-export function promotePendingEncryptionKey(name: string): void {
-  const pending = listPendingLocalEncryptionKeys()
-  const found = pending.find((k) => k.name === name)
-  if (!found) return
-  saveLocalEncryptionKey(found)
-  localStorage.setItem(
-    pendingKey,
-    JSON.stringify(pending.filter((k) => k.name !== name)),
-  )
 }

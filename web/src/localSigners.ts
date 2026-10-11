@@ -29,7 +29,14 @@ function readSigners(prefix: string): LocalSigner[] {
 }
 
 export function listLocalSigners(): LocalSigner[] {
-  return readSigners(walletPrefix)
+  const seen = new Set<string>()
+  const signers: LocalSigner[] = []
+  for (const s of [...readSigners(walletPrefix), ...readSigners(pendingPrefix)]) {
+    if (seen.has(s.slotId)) continue
+    seen.add(s.slotId)
+    signers.push(s)
+  }
+  return signers
 }
 
 export function listPendingSigners(): LocalSigner[] {

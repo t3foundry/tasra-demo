@@ -14,6 +14,7 @@ import {
   listLocalEncryptionRecords,
   saveLocalEncryptionRecord,
 } from '../localEncryptionDocuments'
+import { useDemoVideoUrl } from '../videos'
 
 function downloadBundle(record: EncryptionRecord) {
   const bundle = { manifest: record.manifest, ciphertext: record.ciphertext }
@@ -36,6 +37,7 @@ export function EncryptionPage() {
   const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [selectedSlot, setSelectedSlot] = useState('')
   const [busy, setBusy] = useState(false)
+  const demoVideoUrl = useDemoVideoUrl('send-encrypted-email-attachment')
 
   const loadKeys = useCallback(() => {
     setKeys(listLocalEncryptionKeys())
@@ -249,7 +251,7 @@ export function EncryptionPage() {
             controls
             playsInline
             preload="metadata"
-            src="https://s3.eu-west-1.filonecontent.com/tasra-videos/send-encrypted-email-attachment.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=G53R2Y4SV19KXEM3K4K6%2F20261010%2Feu-west-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T194218Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=c5641d76880a9f273269ec6fda31812000335c00ef73e0775be323081829b6ef"
+            src={demoVideoUrl}
           />
         </aside>
       </div>
