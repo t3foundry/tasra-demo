@@ -39,7 +39,7 @@ PLEASE READ THESE TERMS AND CONDITIONS OF USE ("TERMS") CAREFULLY BEFORE ACCESSI
 
 ## 4. Architecture, Data Privacy, and User Responsibility
 
-4.1. **Zero Server Data Storage:** The Demo App operates on a client-side / decentralized architecture. The Company does **not** store, collect, log, or process personal data, user credentials, IP addresses, private keys, or transactional history on server infrastructure controlled by the Company.
+4.1. **Anonymous Analytics:** The Demo App operates on a client-side / decentralized architecture. The Company does **not** store, collect, log, or process personal data, user credentials, private keys, or transactional history on server infrastructure controlled by the Company. The Company may use third-party analytics (such as Google Analytics) that place cookies on your device to collect anonymous, aggregated usage and traffic data for quality-improvement purposes.
 4.2. **Non-Custodial Nature:** The Company does not host, control, manage, or hold custody over user cryptographic wallets, private keys, seed phrases, or testnet transactions.
 4.3. **Public Blockchain Data:** You acknowledge that interactions with the Avalanche Testnet are publicly readable, immutable, and broadcast to a decentralized network. You are solely responsible for managing your cryptographic wallet, wallet security, and any public identifiers or addresses used during interaction with the Demo App.
 
