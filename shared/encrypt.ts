@@ -1,5 +1,9 @@
 import type { Hex } from './model'
 
+// Maximum PDF size accepted for encryption, in bytes (3 MB, decimal, matching
+// the file size most operating systems report).
+export const ENCRYPTION_MAX_PDF_BYTES = 3_000_000
+
 // Wire shape of a Tasra BLS identity-encryption ciphertext, serialized with base64.
 export type EncryptionCiphertext = {
   u: string // 96-byte compressed G2 ephemeral public key

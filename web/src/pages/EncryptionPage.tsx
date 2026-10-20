@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest } from '../../../shared/model'
-import type { EncryptionRecord } from '../../../shared/encrypt'
+import {
+  ENCRYPTION_MAX_PDF_BYTES,
+  type EncryptionRecord,
+} from '../../../shared/encrypt'
 import { useNotice } from '../notice'
 import { shortSlot } from '../components'
 import { FileUpload, type UploadedFile } from '../FileUpload'
@@ -12,9 +15,42 @@ import {
 } from '../localEncryptionKeys'
 import {
   listLocalEncryptionRecords,
+  localEncryptionStorageBytes,
+  removeLocalEncryptionRecord,
   saveLocalEncryptionRecord,
 } from '../localEncryptionDocuments'
 import { useDemoVideoUrl } from '../videos'
+
+const STORAGE_QUOTA = 5 * 1024 * 1024
+
+function mbLabel(bytes: number): string {
+  const mb = bytes / (1024 * 1024)
+  return Number.isInteger(mb) ? `${mb} MB` : `${mb.toFixed(1)} MB`
+}
+
+function StorageGauge({ used, quota }: { used: number; quota: number }) {
+  const ratio = quota <= 0 ? 0 : Math.min(used / quota, 1)
+  const pct = Math.round(ratio * 100)
+  const fill =
+    ratio < 0.7 ? 'var(--success)' : ratio < 0.9 ? 'var(--warn)' : 'var(--danger)'
+  return (
+    <div
+      className="storage-gauge"
+      role="meter"
+      aria-valuenow={Math.round(used)}
+      aria-valuemin={0}
+      aria-valuemax={quota}
+      aria-label={`Storage used: ${mbLabel(used)} of ${mbLabel(quota)} (${pct}%)`}
+    >
+      <span className="storage-gauge-label">
+        {mbLabel(used)} / {mbLabel(quota)} · {pct}%
+      </span>
+      <div className="storage-gauge-bar">
+        <div className="storage-gauge-fill" style={{ width: `${pct}%`, background: fill }} />
+      </div>
+    </div>
+  )
+}
 
 function downloadBundle(record: EncryptionRecord) {
   const bundle = { manifest: record.manifest, ciphertext: record.ciphertext }
@@ -33,6 +69,7 @@ export function EncryptionPage() {
   const notice = useNotice()
   const [keys, setKeys] = useState<LocalEncryptionKey[]>([])
   const [records, setRecords] = useState<EncryptionRecord[]>([])
+  const [storageBytes, setStorageBytes] = useState(0)
   const [title, setTitle] = useState('')
   const [pdf, setPdf] = useState<UploadedFile | null>(null)
   const [selectedSlot, setSelectedSlot] = useState('')
@@ -49,6 +86,7 @@ export function EncryptionPage() {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       ),
     )
+    setStorageBytes(localEncryptionStorageBytes())
   }, [])
 
   useEffect(() => {
@@ -142,6 +180,8 @@ export function EncryptionPage() {
               onChange={setPdf}
               accept="application/pdf"
               extensions={['pdf']}
+              maxBytes={ENCRYPTION_MAX_PDF_BYTES}
+              maxSizeLabel="3 MB"
               label="Drag & drop your PDF here"
               typeLabel="PDF"
               sampleUrl="/sample.pdf"
@@ -213,7 +253,10 @@ export function EncryptionPage() {
         </section>
 
         <section className="panel">
-          <h2>Encrypted documents</h2>
+          <div className="panel-head">
+            <h2>Encrypted documents</h2>
+            <StorageGauge used={storageBytes} quota={STORAGE_QUOTA} />
+          </div>
           {records.length ? (
             records.map((r) => (
               <div className="request" key={r.manifest.recordId}>
@@ -227,6 +270,21 @@ export function EncryptionPage() {
                       onClick={() => downloadBundle(r)}
                     >
                       Download encrypted document
+                    </button>
+                    <button
+                      className="button small danger"
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Remove this encrypted document from this browser? The ciphertext will be permanently lost.',
+                          )
+                        ) {
+                          removeLocalEncryptionRecord(r.manifest.recordId)
+                          loadRecords()
+                        }
+                      }}
+                    >
+                      Remove
                     </button>
                   </div>
                 </div>

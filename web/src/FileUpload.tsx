@@ -2,11 +2,16 @@ import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 
 export type UploadedFile = { name: string; bytes: Uint8Array }
 
-const MAX_BYTES = 8 * 1024 * 1024
+const DEFAULT_MAX_BYTES = 8 * 1024 * 1024
 
 function sizeLabel(bytes: number): string {
   const kb = bytes / 1024
   return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb.toFixed(0)} KB`
+}
+
+function maxLabel(bytes: number): string {
+  const mb = bytes / (1024 * 1024)
+  return Number.isInteger(mb) ? `${mb} MB` : `${mb.toFixed(1)} MB`
 }
 
 function extensionOf(name: string): string {
@@ -20,7 +25,9 @@ export function FileUpload({
   accept,
   extensions,
   label = 'Drag & drop your file here',
-  hint = 'Up to 8 MB · or click to browse for a file.',
+  hint,
+  maxBytes = DEFAULT_MAX_BYTES,
+  maxSizeLabel,
   typeLabel = 'file',
   sampleUrl,
   sampleLabel = 'Use sample file',
@@ -33,6 +40,8 @@ export function FileUpload({
   extensions?: string[]
   label?: string
   hint?: string
+  maxBytes?: number
+  maxSizeLabel?: string
   typeLabel?: string
   sampleUrl?: string
   sampleLabel?: string
@@ -45,6 +54,9 @@ export function FileUpload({
 
   const allowed = (extensions ?? []).map((e) => e.toLowerCase())
   const acceptAttr = accept ?? allowed.map((e) => '.' + e).join(',')
+  const sizeCapLabel = maxSizeLabel ?? maxLabel(maxBytes)
+  const hintText =
+    hint ?? `Up to ${sizeCapLabel} · or click to browse for a file.`
 
   async function read(f: File) {
     if (allowed.length && !allowed.includes(extensionOf(f.name))) {
@@ -53,8 +65,8 @@ export function FileUpload({
       )
       return
     }
-    if (f.size > MAX_BYTES) {
-      setError('That file is larger than 8 MB.')
+    if (f.size > maxBytes) {
+      setError(`That file is larger than ${sizeCapLabel}.`)
       return
     }
     setError('')
@@ -156,7 +168,7 @@ export function FileUpload({
         onChange={(e) => void pick(e.currentTarget)}
         onClick={(e) => e.stopPropagation()}
       />
-      <p className="hint">{hint}</p>
+      <p className="hint">{hintText}</p>
       {error ? <p className="hint upload-error">{error}</p> : null}
       {sampleUrl ? (
         <>

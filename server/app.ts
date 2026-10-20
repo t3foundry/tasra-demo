@@ -24,11 +24,12 @@ import {
   createSignerSlot,
 } from './signers'
 import { verifyBundle, digest, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
-import type {
-  EncryptionRecord,
-  EncryptionBundle,
-  EncryptionManifest,
-  EncryptionCiphertext,
+import {
+  ENCRYPTION_MAX_PDF_BYTES,
+  type EncryptionRecord,
+  type EncryptionBundle,
+  type EncryptionManifest,
+  type EncryptionCiphertext,
 } from '../shared/encrypt'
 import {
   createEncryptionSlot,
@@ -301,7 +302,7 @@ export function createApp() {
     if (
       !title.trim() ||
       title.length > 120 ||
-      pdf.length > 8 * 1024 * 1024 ||
+      pdf.length > ENCRYPTION_MAX_PDF_BYTES ||
       new TextDecoder().decode(pdf.slice(0, 5)) !== '%PDF-' ||
       !Number.isSafeInteger(version) ||
       version < 1 ||
@@ -310,7 +311,7 @@ export function createApp() {
       !/^[0-9a-f-]{36}$/i.test(id)
     )
       throw new Conflict(
-        'Provide a PDF up to 8 MB, a title, a positive version and a BLS key slot',
+        'Provide a PDF up to 3 MB, a title, a positive version and a BLS key slot',
       )
     const recipient = encryptionIssuerDid()
     const identity = encryptionIdentity(keyName, id, version)
