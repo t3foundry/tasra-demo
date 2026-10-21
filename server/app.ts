@@ -23,22 +23,16 @@ import {
   issueRemoteSignerCredential,
   createSignerSlot,
 } from './signers'
-import { verifyBundle, digest, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
+import { verifyBundle, type Person, type Manifest, type Bundle, type Hex, type SignerRef } from '../shared/model'
 import {
-  ENCRYPTION_MAX_PDF_BYTES,
-  type EncryptionRecord,
-  type EncryptionBundle,
   type EncryptionManifest,
-  type EncryptionCiphertext,
+  type EncryptionEnvelope,
 } from '../shared/encrypt'
 import {
   createEncryptionSlot,
-  encryptDocument,
-  encryptionIdentity,
-  encryptionIssuerDid,
-  serializeCiphertext,
+  groupKeyParams,
   openDecryptSession,
-  decodeCiphertext,
+  decodeWrappedKey,
   decryptDocument,
   type DecryptSession,
 } from './encryption'
@@ -291,109 +285,93 @@ export function createApp() {
     return c.json({ offerUri, qrDataUrl: dataUrl })
   })
 
-  app.post('/api/encryption/documents', async (c) => {
-    const b = await readBody(c)
-    const id = text(b.id)
-    const title = text(b.title)
-    const version = Number(b.version)
-    const slotId = text(b.slotId) as Hex
-    const keyName = text(b.keyName).trim().toLowerCase()
-    const pdf = Buffer.from(text(b.pdfBase64), 'base64')
-    if (
-      !title.trim() ||
-      title.length > 120 ||
-      pdf.length > ENCRYPTION_MAX_PDF_BYTES ||
-      new TextDecoder().decode(pdf.slice(0, 5)) !== '%PDF-' ||
-      !Number.isSafeInteger(version) ||
-      version < 1 ||
-      !/^0x[0-9a-f]{64}$/i.test(slotId) ||
-      !/^[a-z0-9][a-z0-9-]{0,31}$/.test(keyName) ||
-      !/^[0-9a-f-]{36}$/i.test(id)
-    )
-      throw new Conflict(
-        'Provide a PDF up to 3 MB, a title, a positive version and a BLS key slot',
-      )
-    const recipient = encryptionIssuerDid()
-    const identity = encryptionIdentity(keyName, id, version)
-    let ciphertext
-    try {
-      ciphertext = await encryptDocument(slotId, identity, pdf)
-    } catch (e) {
-      throw new Conflict(e instanceof Error ? e.message : 'Encryption failed')
-    }
-    const record: EncryptionRecord = {
-      manifest: {
-        schema: 'tasra-encrypt/v1',
-        recordId: id,
-        title: title.trim(),
-        version,
-        recipient,
-        identity,
-        documentSha256: await digest(pdf),
-        chainId: deployment.chainId,
-        keyRegistry: deployment.addresses.KeyRegistry!,
-        slotId: slotId.toLowerCase() as Hex,
-      },
-      ciphertext: serializeCiphertext(ciphertext),
-      pdfSize: pdf.length,
-      createdAt: new Date().toISOString(),
-    }
-    return c.json(record, 201)
+  // Public params for local envelope encryption: the slot's group public key,
+  // epoch and deployment identity the browser needs to build a v2 bundle.
+  app.post('/api/encryption/keys/:slotId/group-key', async (c) => {
+    const slotId = c.req.param('slotId') as Hex
+    if (!/^0x[0-9a-f]{64}$/i.test(slotId))
+      throw new Conflict('Invalid key slot identifier')
+    const { mpk, epoch } = await groupKeyParams(slotId.toLowerCase() as Hex)
+    return c.json({
+      mpk,
+      epoch,
+      slotId: slotId.toLowerCase(),
+      chainId: deployment.chainId,
+      keyRegistry: deployment.addresses.KeyRegistry,
+    })
   })
 
-  // Decryption: an uploaded bundle names a key slot and identity; a remote wallet
-  // present its DocumentReader credential to authorize threshold extraction.
+  // Decryption: an uploaded bundle names a key slot and the group-key wrapped AES
+  // key; a remote wallet presents its DocumentReader credential to authorize
+  // threshold unwrapping of the JWT that carries the AES key + nonce.
   type DecryptEntry = {
     manifest: EncryptionManifest
-    ciphertext: EncryptionCiphertext
+    envelope: EncryptionEnvelope
     session: DecryptSession
     fileName: string
     phase: 'awaiting_wallet' | 'decrypting' | 'done' | 'failed'
-    plaintextBase64?: string
-    pdfSize?: number
+    jwtBase64?: string
     error?: string
   }
+  // Decrypt sessions intentionally stay in this map after reaching `done` or
+  // `failed`: the client's polling loop fetches the terminal status (and, on
+  // `done`, the wrapped AES key) on a subsequent request, so removing the entry
+  // immediately would surface "Unknown decryption session". A TTL sweep to
+  // reclaim these entries could be added later.
   const decryptSessions = new Map<string, DecryptEntry>()
 
   app.post('/api/encryption/decrypt', async (c) => {
     const b = await readBody(c)
-    const bundle = b.bundle as Partial<EncryptionBundle> | undefined
-    const manifest = bundle?.manifest
-    const ciphertext = bundle?.ciphertext
+    const manifest = b.manifest as Partial<EncryptionManifest> | undefined
+    const envelope = b.envelope as Partial<EncryptionEnvelope> | undefined
     if (
       !manifest ||
-      !ciphertext ||
-      manifest.schema !== 'tasra-encrypt/v1' ||
-      typeof manifest.identity !== 'string' ||
-      !manifest.identity.trim() ||
+      !envelope ||
+      manifest.schema !== 'tasra-encrypt/v2' ||
       typeof manifest.title !== 'string' ||
       !manifest.title.trim() ||
       manifest.title.length > 120 ||
       !Number.isSafeInteger(manifest.version) ||
-      manifest.version < 1 ||
-      !/^[0-9a-f-]{36}$/i.test(manifest.recordId) ||
-      typeof manifest.recipient !== 'string' ||
-      !/^[0-9a-f]{64}$/.test(manifest.documentSha256) ||
+      (manifest.version as number) < 1 ||
+      !/^[0-9a-f-]{36}$/i.test(manifest.recordId ?? '') ||
+      !/^[0-9a-f]{64}$/.test(manifest.documentSha256 ?? '') ||
       manifest.chainId !== deployment.chainId ||
-      manifest.keyRegistry.toLowerCase() !==
+      !/^0x[0-9a-f]{40}$/i.test(manifest.keyRegistry ?? '') ||
+      (manifest.keyRegistry ?? '').toLowerCase() !==
         deployment.addresses.KeyRegistry!.toLowerCase() ||
-      !/^0x[0-9a-f]{64}$/i.test(manifest.slotId) ||
-      typeof ciphertext.u !== 'string' ||
-      typeof ciphertext.nonce !== 'string' ||
-      typeof ciphertext.aeadCt !== 'string'
+      !/^0x[0-9a-f]{64}$/i.test(manifest.slotId ?? '') ||
+      typeof envelope.encryptedAesKey !== 'string' ||
+      typeof envelope.aesCiphertext !== 'string' ||
+      !Number.isSafeInteger(envelope.epoch) ||
+      (envelope.epoch as number) < 0
     )
       throw new Conflict('Upload a valid Tasra encryption bundle')
-    const slotId = manifest.slotId.toLowerCase() as Hex
+    const env = envelope as EncryptionEnvelope
+    const isStrictBase64 = (s: string) =>
+      /^[A-Za-z0-9+/]*={0,2}$/.test(s) && s.length % 4 === 0
+    if (
+      !isStrictBase64(env.encryptedAesKey) ||
+      !isStrictBase64(env.aesCiphertext) ||
+      Buffer.from(env.encryptedAesKey, 'base64').length === 0 ||
+      Buffer.from(env.aesCiphertext, 'base64').length === 0
+    )
+      throw new Conflict('Upload a valid Tasra encryption bundle')
+    const slotId = manifest.slotId!.toLowerCase() as Hex
+    const wrapped = decodeWrappedKey(
+      envelope as EncryptionEnvelope,
+      manifest.documentSha256!,
+    )
     const session = await openDecryptSession(
       slotId,
-      manifest.identity,
+      wrapped.aad,
+      wrapped.ciphertext,
       `Decrypt ${manifest.title} (version ${manifest.version})`,
     )
     const fileName = `${manifest.title.replace(/[^\w.-]+/g, '_')} (v${manifest.version}).pdf`
     const id = randomUUID()
     decryptSessions.set(id, {
-      manifest,
-      ciphertext,
+      manifest: manifest as EncryptionManifest,
+      envelope: envelope as EncryptionEnvelope,
       session,
       fileName,
       phase: 'awaiting_wallet',
@@ -410,12 +388,7 @@ export function createApp() {
     const entry = decryptSessions.get(c.req.param('id'))
     if (!entry) throw new Conflict('Unknown decryption session')
     if (entry.phase === 'done')
-      return c.json({
-        status: 'done',
-        plaintextBase64: entry.plaintextBase64,
-        pdfSize: entry.pdfSize,
-        fileName: entry.fileName,
-      })
+      return c.json({ status: 'done', jwtBase64: entry.jwtBase64 })
     if (entry.phase === 'failed')
       return c.json({ status: 'failed', error: entry.error })
     if (entry.phase === 'decrypting') return c.json({ status: 'processing' })
@@ -432,24 +405,24 @@ export function createApp() {
       })
     entry.phase = 'decrypting'
     try {
-      const plaintext = await decryptDocument(
+      const wrapped = decodeWrappedKey(
+        entry.envelope,
+        entry.manifest.documentSha256,
+      )
+      const jwtBytes = await decryptDocument(
         entry.session,
-        decodeCiphertext(entry.ciphertext),
+        wrapped.ciphertext,
+        wrapped.epoch,
+        wrapped.aad,
         () => {},
       )
       try {
-        entry.plaintextBase64 = Buffer.from(plaintext).toString('base64')
-        entry.pdfSize = plaintext.length
+        entry.jwtBase64 = Buffer.from(jwtBytes).toString('base64')
       } finally {
-        plaintext.fill(0)
+        jwtBytes.fill(0)
       }
       entry.phase = 'done'
-      return c.json({
-        status: 'done',
-        plaintextBase64: entry.plaintextBase64,
-        pdfSize: entry.pdfSize,
-        fileName: entry.fileName,
-      })
+      return c.json({ status: 'done', jwtBase64: entry.jwtBase64 })
     } catch (e) {
       entry.phase = 'failed'
       entry.error =

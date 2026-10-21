@@ -7,17 +7,17 @@ function isEncryptionRecord(value: unknown): value is EncryptionRecord {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Partial<EncryptionRecord>
   const manifest = record.manifest
-  const ciphertext = record.ciphertext
+  const envelope = record.envelope
   if (typeof manifest !== 'object' || manifest === null) return false
-  if (typeof ciphertext !== 'object' || ciphertext === null) return false
+  if (typeof envelope !== 'object' || envelope === null) return false
   return (
     typeof record.createdAt === 'string' &&
     typeof record.pdfSize === 'number' &&
-    manifest.schema === 'tasra-encrypt/v1' &&
+    manifest.schema === 'tasra-encrypt/v2' &&
     typeof manifest.recordId === 'string' &&
-    typeof ciphertext.u === 'string' &&
-    typeof ciphertext.nonce === 'string' &&
-    typeof ciphertext.aeadCt === 'string'
+    typeof envelope.encryptedAesKey === 'string' &&
+    typeof envelope.aesCiphertext === 'string' &&
+    Number.isSafeInteger(envelope.epoch)
   )
 }
 

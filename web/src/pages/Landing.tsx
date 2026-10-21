@@ -30,7 +30,7 @@ const demoApps: App[] = [
     eyebrow: 'Demo app · Encryption',
     title: 'Encrypt a document',
     description:
-      'Create an identity-based key on Tasra to securely encrypt documents for specific recipients.',
+      'Create a BLS key on Tasra to securely encrypt documents for a specific recipient.',
     to: '/encryption',
     cta: 'Open Encryption',
     points: [

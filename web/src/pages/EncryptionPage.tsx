@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest } from '../../../shared/model'
+import { encryptEnvelope, hexToBytes, toBytes } from 'tasra-sdk'
 import {
   ENCRYPTION_MAX_PDF_BYTES,
+  encodeCompactJwt,
   type EncryptionRecord,
+  type EncryptionManifest,
+  type EncryptionEnvelope,
 } from '../../../shared/encrypt'
 import { useNotice } from '../notice'
 import { shortSlot } from '../components'
@@ -53,7 +57,7 @@ function StorageGauge({ used, quota }: { used: number; quota: number }) {
 }
 
 function downloadBundle(record: EncryptionRecord) {
-  const bundle = { manifest: record.manifest, ciphertext: record.ciphertext }
+  const bundle = { manifest: record.manifest, envelope: record.envelope }
   const name = record.manifest.title.replace(/[^\w.-]+/g, '_')
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' }),
@@ -101,30 +105,76 @@ export function EncryptionPage() {
       if (!upload) throw new Error('Choose a PDF first')
       const key = keys.find((k) => k.slotId === selectedSlot)
       if (!key) throw new Error('Select a BLS encryption key')
-      const fingerprint = JSON.stringify({
-        hash: await digest(upload),
-        title,
-        slotId: selectedSlot,
-      })
-      const pending = JSON.parse(
-        sessionStorage.getItem('pending-encrypt') ?? 'null',
-      ) as { fingerprint: string; id: string } | null
-      const id =
-        pending?.fingerprint === fingerprint ? pending.id : crypto.randomUUID()
-      sessionStorage.setItem(
-        'pending-encrypt',
-        JSON.stringify({ fingerprint, id }),
+      const recordId = crypto.randomUUID()
+
+      // 1. Generate a fresh 32-byte AES key and 12-byte nonce in the browser.
+      const aesKeyBytes = new Uint8Array(32)
+      const nonce = new Uint8Array(12)
+      crypto.getRandomValues(aesKeyBytes)
+      crypto.getRandomValues(nonce)
+
+      // 2. AES-256-GCM encrypt the PDF locally; the key never leaves the client.
+      const aesCryptoKey = await crypto.subtle.importKey(
+        'raw',
+        aesKeyBytes.buffer as ArrayBuffer,
+        'AES-GCM',
+        false,
+        ['encrypt'],
       )
-      const created = await api<EncryptionRecord>('/encryption/documents', {
-        id,
-        title,
+      const aesCiphertext = new Uint8Array(
+        await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv: nonce.buffer as ArrayBuffer },
+          aesCryptoKey,
+          upload.buffer as ArrayBuffer,
+        ),
+      )
+
+      // 3. The KEM identity (AAD) is the document's SHA-256 hex string.
+      const documentSha256 = await digest(upload)
+      const aad = new TextEncoder().encode(documentSha256)
+
+      // 4. Resolve the slot's group public key + epoch and deployment chain/key-registry.
+      const params = await api<{
+        mpk: string
+        epoch: number
+        slotId: string
+        chainId: number
+        keyRegistry: string
+      }>(`/encryption/keys/${selectedSlot}/group-key`, {})
+
+      // 5. Transport the AES key + nonce in an unsigned compact JWT, then KEM-wrap
+      //    that JWT under the slot's group key into a single opaque ciphertext.
+      const jwt = encodeCompactJwt({ aesKey: aesKeyBytes, aesNonce: nonce })
+      const kemEnv = encryptEnvelope(
+        hexToBytes(selectedSlot),
+        hexToBytes(params.mpk),
+        aad,
+        jwt,
+        BigInt(params.epoch),
+      )
+
+      const envelope: EncryptionEnvelope = {
+        encryptedAesKey: base64(toBytes(kemEnv)),
+        aesCiphertext: base64(aesCiphertext),
+        epoch: params.epoch,
+      }
+      const manifest: EncryptionManifest = {
+        schema: 'tasra-encrypt/v2',
+        recordId,
+        title: title.trim(),
         version: 1,
-        slotId: selectedSlot,
-        keyName: key.name,
-        pdfBase64: base64(upload),
-      })
-      sessionStorage.removeItem('pending-encrypt')
-      saveLocalEncryptionRecord(created)
+        documentSha256,
+        chainId: params.chainId,
+        keyRegistry: params.keyRegistry as `0x${string}`,
+        slotId: selectedSlot as `0x${string}`,
+      }
+      const record: EncryptionRecord = {
+        manifest,
+        envelope,
+        pdfSize: upload.length,
+        createdAt: new Date().toISOString(),
+      }
+      saveLocalEncryptionRecord(record)
       setTitle('')
       setPdf(null)
       setSelectedSlot('')
@@ -144,8 +194,8 @@ export function EncryptionPage() {
           <div className="eyebrow">Encryption</div>
           <h1>Encrypt a document.</h1>
           <p className="sub">
-            Select an identity key, lock your PDF to a specific recipient, and ensure only
-            someone with the matching credential can open it.
+            Select a BLS key, encrypt your PDF locally with a fresh AES key, and wrap
+            that key so only the matching credential can unlock it.
           </p>
         </div>
       </div>
@@ -198,7 +248,7 @@ export function EncryptionPage() {
               <div>
                 <h3 className="send-step-title">Encryption key</h3>
                 <p className="send-step-sub">
-                  Choose the BLS key your document is encrypted to.
+                  Choose the BLS key whose group key wraps your document's AES key.
                 </p>
               </div>
             </div>
@@ -239,8 +289,8 @@ export function EncryptionPage() {
 
           <div className="send-step send-step-foot">
             <p className="hint">
-              Encryption binds the document to a scoped identity under the issuer. The
-              plaintext never leaves the browser except for the encrypted ciphertext.
+              The PDF is AES-encrypted in this browser; the AES key is then wrapped under
+              the slot's group key. Neither the PDF nor the AES key ever reaches the server.
             </p>
             <button
               className="primary"

@@ -1,40 +1,23 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { hexToBytes, type IbeCiphertext } from 'tasra-sdk'
+import { hexToBytes, fromBytes, type Ciphertext } from 'tasra-sdk'
+import { resolveSlotGroupKey, resolveSlotKeeperUrls, nodeApi } from 'tasra-sdk/chain'
+import { committeeDecrypt } from 'tasra-sdk/committee'
 import {
   openVerifierAgentSession,
   awaitVerifierAgentResult,
+  decryptPayloadDigest,
   VerifierAgentSessionError,
 } from 'tasra-sdk/oid4vp'
 import { createFileStore } from 'tasra-sdk/app/node'
-import { deployment, tasra, verifierAgentUrl } from './config'
+import { deployment, tasra, chain, verifierAgentUrl } from './config'
 import { stateDirectory } from './store'
 import { loadService } from './backend'
 import { readIssuerSeed, fundNewSlot, slotProgressMessage } from './signers'
 import { toHex, type Hex } from '../shared/model'
-import type { EncryptionCiphertext } from '../shared/encrypt'
+import type { EncryptionEnvelope } from '../shared/encrypt'
 
-/** Deterministic issuer DID derived from the setup seed. */
-export function encryptionIssuerDid(): string {
-  const issuer = tasra.identities.create({ seed: hexToBytes(readIssuerSeed()) })
-  try {
-    return issuer.did
-  } finally {
-    issuer.destroy()
-  }
-}
-
-/** Exact identity scope bound to one key, the issuer as recipient, and document version. */
-export function encryptionIdentity(
-  keyName: string,
-  recordId: string,
-  version: number,
-): string {
-  const issuer = encryptionIssuerDid()
-  return `${issuer}/keys/${keyName}/recipient/${issuer}/id/${recordId}/version/${version}`
-}
-
-/** Create and fund a BLS identity-encryption key slot gated by a DocumentReader scope. */
+/** Create and fund a BLS key slot gated by a DocumentReader scope. */
 export async function createEncryptionSlot(
   name: string,
   onProgress: (message: string) => void,
@@ -81,22 +64,12 @@ export async function createEncryptionSlot(
   }
 }
 
-export function serializeCiphertext(c: IbeCiphertext) {
-  return {
-    u: Buffer.from(c.u).toString('base64'),
-    nonce: Buffer.from(c.nonce).toString('base64'),
-    aeadCt: Buffer.from(c.aeadCt).toString('base64'),
-  }
-}
-
-/** Encrypt plaintext under an identity using the slot's anchored BLS public key. */
-export async function encryptDocument(
+/** Resolve the slot's anchored group public key + epoch for local envelope encryption. */
+export async function groupKeyParams(
   slotId: Hex,
-  identity: string,
-  plaintext: Uint8Array,
-) {
-  const slot = await tasra.slots.bls(slotId)
-  return slot.encrypt(identity, plaintext)
+): Promise<{ mpk: Hex; epoch: number }> {
+  const { publicKey, epoch } = await resolveSlotGroupKey(chain, slotId)
+  return { mpk: publicKey as Hex, epoch }
 }
 
 export type DecryptSession = {
@@ -105,22 +78,24 @@ export type DecryptSession = {
   qrPayload: string
   requestHash: Hex
   slotId: Hex
-  identity: string
+  aad: Uint8Array
 }
 
-/** Open a wallet session authorizing identity-key extraction for one ciphertext. */
+/** Open a wallet session authorizing group-key unwrapping for one wrapped AES key. */
 export async function openDecryptSession(
   slotId: Hex,
-  identity: string,
+  aad: Uint8Array,
+  ciphertext: Ciphertext,
   description: string,
 ): Promise<DecryptSession> {
   const creator = tasra.wallets.create({ privateKey: loadService().creatorKey })
+  const payloadDigest = decryptPayloadDigest(ciphertext.u, ciphertext.aeadCt)
   const session = await openVerifierAgentSession({
     chainId: deployment.chainId,
     keyRegistry: deployment.addresses.KeyRegistry!,
     slotId,
-    action: 'ibe-extract',
-    identity,
+    action: 'decrypt',
+    payloadDigest,
     description,
     verifierAgentUrl,
     signer: creator.signer,
@@ -131,23 +106,70 @@ export async function openDecryptSession(
     qrPayload: session.qrPayload,
     requestHash: toHex(session.requestHash),
     slotId,
-    identity,
+    aad,
   }
 }
 
-/** Decode a wire-serialized ciphertext back to SDK bytes. */
-export function decodeCiphertext(c: EncryptionCiphertext): IbeCiphertext {
+/** Discover the slot's keeper peers for the BLS decryption ceremony. */
+async function resolveBlsPeers(
+  slotId: Hex,
+): Promise<{
+  nodeUrl: string
+  decryptingSet: number[]
+  blsPeers: { id: number; peerId: string }[]
+}> {
+  const urls = await resolveSlotKeeperUrls(chain, slotId)
+  // The first keeper URL is the coordinator the committee decrypt targets.
+  const nodeUrl = urls[0]
+  if (!nodeUrl) throw new Error('No keeper endpoints for this slot')
+  const infos = await Promise.all(urls.map((url) => nodeApi.info(url)))
+  const peers: { id: number; peerId: string }[] = []
+  for (let i = 0; i < urls.length; i++) {
+    const info = infos[i]
+    const id = info?.node_identifier
+    const peerId = info?.peer_id
+    if (typeof id === 'number' && typeof peerId === 'string')
+      peers.push({ id, peerId })
+  }
+  return { nodeUrl, decryptingSet: peers.map((p) => p.id), blsPeers: peers }
+}
+
+/** Decode a wire-serialized envelope back into the KEM ciphertext, AAD and epoch. */
+export function decodeWrappedKey(
+  envelope: EncryptionEnvelope,
+  documentSha256: string,
+): {
+  ciphertext: Ciphertext
+  aad: Uint8Array
+  epoch: number
+} {
+  const groupEnvelope = fromBytes(
+    new Uint8Array(Buffer.from(envelope.encryptedAesKey, 'base64')),
+  )
+  // The AAD bound into the KEM AEAD is the document's SHA-256 hex string.
+  const aad = new Uint8Array(Buffer.from(documentSha256, 'utf8'))
+  const groupAad = groupEnvelope.identity
+  if (
+    groupAad.length !== aad.length ||
+    !groupAad.every((b, i) => b === aad[i])
+  )
+    throw new Error('Envelope identity does not match document SHA-256')
+  const embeddedEpoch = groupEnvelope.epoch
+  if (embeddedEpoch !== null && embeddedEpoch !== BigInt(envelope.epoch))
+    throw new Error('Envelope epoch mismatch')
   return {
-    u: new Uint8Array(Buffer.from(c.u, 'base64')),
-    nonce: new Uint8Array(Buffer.from(c.nonce, 'base64')),
-    aeadCt: new Uint8Array(Buffer.from(c.aeadCt, 'base64')),
+    ciphertext: groupEnvelope.ciphertext,
+    aad,
+    epoch: embeddedEpoch === null ? envelope.epoch : Number(embeddedEpoch),
   }
 }
 
-/** Await the wallet presentation, then decrypt with the freshly bound grant. */
+/** Await the wallet presentation, then unwrap the KEM plaintext (the compact JWT) through the keeper committee. */
 export async function decryptDocument(
   saved: DecryptSession,
-  ciphertext: IbeCiphertext,
+  ciphertext: Ciphertext,
+  epoch: number,
+  aad: Uint8Array,
   beforeSubmit: () => void,
 ): Promise<Uint8Array> {
   let grant
@@ -172,14 +194,15 @@ export async function decryptDocument(
   if (!grant.verifierProofs?.length)
     throw new Error('Missing verifier membership proofs')
   beforeSubmit()
-  const handle = await tasra.slots.bls(saved.slotId)
-  const opened = await handle.decrypt(saved.identity, ciphertext, {
-    requireReceipts: true,
-    signal: AbortSignal.timeout(120000),
-    authorize: async () => ({
-      token: grant.token,
-      verifierProofs: grant.verifierProofs!,
-    }),
+  const { nodeUrl, decryptingSet, blsPeers } = await resolveBlsPeers(saved.slotId)
+  return await committeeDecrypt({
+    nodeUrl,
+    committeeToken: grant.token,
+    ciphertext,
+    identity: aad,
+    decryptingSet,
+    blsPeers,
+    verifierProofs: grant.verifierProofs,
+    ciphertextEpoch: epoch,
   })
-  return opened.plaintext
 }
