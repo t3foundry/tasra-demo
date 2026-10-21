@@ -28,9 +28,11 @@ import {
   type EncryptionManifest,
   type EncryptionEnvelope,
 } from '../shared/encrypt'
+import type { Ciphertext } from 'tasra-sdk'
 import {
   createEncryptionSlot,
   groupKeyParams,
+  aadForDocument,
   openDecryptSession,
   decodeWrappedKey,
   decryptDocument,
@@ -301,12 +303,14 @@ export function createApp() {
     })
   })
 
-  // Decryption: an uploaded bundle names a key slot and the group-key wrapped AES
-  // key; a remote wallet presents its DocumentReader credential to authorize
+  // Decryption: an uploaded bundle names a key slot and the group-key wrapped
+  // AES key; a remote wallet presents its DocumentReader credential to authorize
   // threshold unwrapping of the JWT that carries the AES key + nonce.
   type DecryptEntry = {
     manifest: EncryptionManifest
     envelope: EncryptionEnvelope
+    ciphertext: Ciphertext
+    epoch: number
     session: DecryptSession
     fileName: string
     phase: 'awaiting_wallet' | 'decrypting' | 'done' | 'failed'
@@ -357,13 +361,9 @@ export function createApp() {
     )
       throw new Conflict('Upload a valid Tasra encryption bundle')
     const slotId = manifest.slotId!.toLowerCase() as Hex
-    const wrapped = decodeWrappedKey(
-      envelope as EncryptionEnvelope,
-      manifest.documentSha256!,
-    )
+    const wrapped = decodeWrappedKey(envelope as EncryptionEnvelope)
     const session = await openDecryptSession(
       slotId,
-      wrapped.aad,
       wrapped.ciphertext,
       `Decrypt ${manifest.title} (version ${manifest.version})`,
     )
@@ -372,6 +372,8 @@ export function createApp() {
     decryptSessions.set(id, {
       manifest: manifest as EncryptionManifest,
       envelope: envelope as EncryptionEnvelope,
+      ciphertext: wrapped.ciphertext,
+      epoch: wrapped.epoch,
       session,
       fileName,
       phase: 'awaiting_wallet',
@@ -405,15 +407,12 @@ export function createApp() {
       })
     entry.phase = 'decrypting'
     try {
-      const wrapped = decodeWrappedKey(
-        entry.envelope,
-        entry.manifest.documentSha256,
-      )
+      const aad = aadForDocument(entry.manifest.documentSha256)
       const jwtBytes = await decryptDocument(
         entry.session,
-        wrapped.ciphertext,
-        wrapped.epoch,
-        wrapped.aad,
+        entry.ciphertext,
+        entry.epoch,
+        aad,
         () => {},
       )
       try {
@@ -431,6 +430,12 @@ export function createApp() {
           : e instanceof Error
             ? e.message
             : 'Decryption failed'
+      // Surface the underlying keeper/verifier error to the server console so
+      // decrypt failures are diagnosable rather than silently generic.
+      console.error(
+        `[encryption] decrypt failed for session ${c.req.param('id')}:`,
+        e,
+      )
       return c.json({ status: 'failed', error: entry.error })
     }
   })

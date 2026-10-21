@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest } from '../../../shared/model'
-import { encryptEnvelope, hexToBytes, toBytes } from 'tasra-sdk'
+import { encryptEnvelope, toBytes, hexToBytes } from 'tasra-sdk'
 import {
   ENCRYPTION_MAX_PDF_BYTES,
   encodeCompactJwt,
@@ -129,7 +129,7 @@ export function EncryptionPage() {
         ),
       )
 
-      // 3. The KEM identity (AAD) is the document's SHA-256 hex string.
+      // 3. The KEM AAD is the document's SHA-256 hex string.
       const documentSha256 = await digest(upload)
       const aad = new TextEncoder().encode(documentSha256)
 
@@ -142,8 +142,9 @@ export function EncryptionPage() {
         keyRegistry: string
       }>(`/encryption/keys/${selectedSlot}/group-key`, {})
 
-      // 5. Transport the AES key + nonce in an unsigned compact JWT, then KEM-wrap
-      //    that JWT under the slot's group key into a single opaque ciphertext.
+      // 5. Transport the AES key + nonce in an unsigned compact JWT, then wrap that
+      //    JWT under the slot's group key (BLS-G2 ElGamal KEM + ChaCha20-Poly1305)
+      //    into a single opaque ciphertext.
       const jwt = encodeCompactJwt({ aesKey: aesKeyBytes, aesNonce: nonce })
       const kemEnv = encryptEnvelope(
         hexToBytes(selectedSlot),

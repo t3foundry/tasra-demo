@@ -5,8 +5,8 @@ import type { Hex } from './model'
 export const ENCRYPTION_MAX_PDF_BYTES = 3_000_000
 
 export type EncryptionEnvelope = {
-  encryptedAesKey: string // base64 of toBytes(GroupEnvelope): the KEM-wrapped compact JWT
-  aesCiphertext: string // AES-256-GCM output of the PDF (ciphertext + 16-byte tag), base64
+  encryptedAesKey: string // base64 of toBytes(GroupEnvelope): the group-key KEM wrapping the compact JWT { aesKey, aesNonce }
+  aesCiphertext: string // AES-256-GCM output of the PDF, base64
   epoch: number // slot epoch the key was wrapped under
 }
 

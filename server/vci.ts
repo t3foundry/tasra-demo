@@ -77,7 +77,6 @@ export function issueForHolder(
         cnf: holderCnf({ did: holderDid }),
         claims: {
           key: name,
-          documents: [`${issuer.did}/keys/${name}/*`],
         },
         ttlSecs: 365 * 24 * 60 * 60,
       })

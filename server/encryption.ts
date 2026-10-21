@@ -17,7 +17,12 @@ import { readIssuerSeed, fundNewSlot, slotProgressMessage } from './signers'
 import { toHex, type Hex } from '../shared/model'
 import type { EncryptionEnvelope } from '../shared/encrypt'
 
-/** Create and fund a BLS key slot gated by a DocumentReader scope. */
+/**
+ * Create and fund a BLS key slot gated by a DocumentReader credential. The rule is
+ * deliberately NOT identity-scoped: group-key KEM decryption (`committeeDecrypt`)
+ * authorizes a whole-group decrypt rather than a per-identity extraction, so the
+ * reader's credential only needs to match the `key` claim.
+ */
 export async function createEncryptionSlot(
   name: string,
   onProgress: (message: string) => void,
@@ -31,7 +36,6 @@ export async function createEncryptionSlot(
     issuer: issuer.did,
     type: 'DocumentReader',
     claims: { key: [name] },
-    identityScope: { claim: 'documents' },
   })
   try {
     let last = ''
@@ -78,13 +82,11 @@ export type DecryptSession = {
   qrPayload: string
   requestHash: Hex
   slotId: Hex
-  aad: Uint8Array
 }
 
 /** Open a wallet session authorizing group-key unwrapping for one wrapped AES key. */
 export async function openDecryptSession(
   slotId: Hex,
-  aad: Uint8Array,
   ciphertext: Ciphertext,
   description: string,
 ): Promise<DecryptSession> {
@@ -106,7 +108,26 @@ export async function openDecryptSession(
     qrPayload: session.qrPayload,
     requestHash: toHex(session.requestHash),
     slotId,
-    aad,
+  }
+}
+
+/** AAD bound into the group-key KEM AEAD: the document's SHA-256 hex string. */
+export function aadForDocument(documentSha256: string): Uint8Array {
+  return new Uint8Array(Buffer.from(documentSha256, 'utf8'))
+}
+
+/** Decode the group-key KEM envelope back into its ciphertext + epoch. */
+export function decodeWrappedKey(envelope: EncryptionEnvelope): {
+  ciphertext: Ciphertext
+  epoch: number
+} {
+  const groupEnvelope = fromBytes(
+    new Uint8Array(Buffer.from(envelope.encryptedAesKey, 'base64')),
+  )
+  return {
+    ciphertext: groupEnvelope.ciphertext,
+    epoch:
+      groupEnvelope.epoch === null ? envelope.epoch : Number(groupEnvelope.epoch),
   }
 }
 
@@ -119,7 +140,8 @@ async function resolveBlsPeers(
   blsPeers: { id: number; peerId: string }[]
 }> {
   const urls = await resolveSlotKeeperUrls(chain, slotId)
-  // The first keeper URL is the coordinator the committee decrypt targets.
+  // The first keeper URL is the coordinator the committee decrypt targets, matching
+  // the SDK's own `createCommitteeSlotClient` convention.
   const nodeUrl = urls[0]
   if (!nodeUrl) throw new Error('No keeper endpoints for this slot')
   const infos = await Promise.all(urls.map((url) => nodeApi.info(url)))
@@ -132,36 +154,6 @@ async function resolveBlsPeers(
       peers.push({ id, peerId })
   }
   return { nodeUrl, decryptingSet: peers.map((p) => p.id), blsPeers: peers }
-}
-
-/** Decode a wire-serialized envelope back into the KEM ciphertext, AAD and epoch. */
-export function decodeWrappedKey(
-  envelope: EncryptionEnvelope,
-  documentSha256: string,
-): {
-  ciphertext: Ciphertext
-  aad: Uint8Array
-  epoch: number
-} {
-  const groupEnvelope = fromBytes(
-    new Uint8Array(Buffer.from(envelope.encryptedAesKey, 'base64')),
-  )
-  // The AAD bound into the KEM AEAD is the document's SHA-256 hex string.
-  const aad = new Uint8Array(Buffer.from(documentSha256, 'utf8'))
-  const groupAad = groupEnvelope.identity
-  if (
-    groupAad.length !== aad.length ||
-    !groupAad.every((b, i) => b === aad[i])
-  )
-    throw new Error('Envelope identity does not match document SHA-256')
-  const embeddedEpoch = groupEnvelope.epoch
-  if (embeddedEpoch !== null && embeddedEpoch !== BigInt(envelope.epoch))
-    throw new Error('Envelope epoch mismatch')
-  return {
-    ciphertext: groupEnvelope.ciphertext,
-    aad,
-    epoch: embeddedEpoch === null ? envelope.epoch : Number(embeddedEpoch),
-  }
 }
 
 /** Await the wallet presentation, then unwrap the KEM plaintext (the compact JWT) through the keeper committee. */
