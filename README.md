@@ -120,6 +120,19 @@ npm run serve
 | `npm run verify -- document.pdf expected-request.json signatures.json` | Verify a saved bundle offline. |
 | `npm run hooks:install` | Point git at the repo's committed hooks (also run automatically on `npm install`). |
 
+## Agent skills
+
+OpenCode skills for Tasra operations live in `.agent/skills/` (wired via `opencode.json`).
+Install or refresh them:
+
+```bash
+npx @t3foundry/tasra-skills@latest init
+```
+
+Load `tasra-getting-started` first, then the operation-specific skills
+(`tasra-sign-and-decrypt`, `tasra-create-slot`, `tasra-handle-errors`, etc.) for
+individual Tasra tasks.
+
 ## Git hooks
 
 A `pre-commit` hook (`.git-hooks/pre-commit`) bumps the `package.json`/`package-lock.json`

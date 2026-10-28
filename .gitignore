@@ -12,3 +12,4 @@ web/public/pdf-assets/
 
 # Scratch / generated test output
 encrypted.json
+/.agent/
