@@ -68,3 +68,61 @@ For blob streaming, offline cryptographic tests and existing legacy integrations
 read [advanced IBE operations](references/advanced.md). The current application
 path does not require those low-level steps. Native multi-approver extraction and
 independent per-keeper share certificates remain upstream dependencies.
+
+## Encrypted-text schema (`tasra-encrypt/v2`)
+
+Every encrypted text persisted by this application uses one fixed JSON bundle
+shape, `tasra-encrypt/v2`. Reuse this exact schema for all encrypted texts; do not
+invent per-record variants. The `manifest` identifies the record and pins the
+encryption slot; the `envelope` carries the wrapped data key and the AES ciphertext.
+Field order is stable and must not be reordered by serialization.
+
+```json
+{
+  "manifest": {
+    "schema": "tasra-encrypt/v2",
+    "recordId": "1e833e64-1bbc-4c39-8ddf-b5c798ae28e2",
+    "title": "test",
+    "version": 1,
+    "documentSha256": "a9a051703f6bdda791e55419828da90f6bb83919eaf7f68b669ddf49c6c81ce1",
+    "chainId": 43113,
+    "keyRegistry": "0x45F432aB5709e9920b5ec349D29663D7200A8C39",
+    "slotId": "0x5e5d9e496462f4e7786ad7da7c1d19b6b213a945be75f8aa67724aebe58c69e8"
+  },
+  "envelope": {
+    "encryptedAesKey": "<base64 group-key KEM envelope>",
+    "aesCiphertext": "<base64 AES-256-GCM ciphertext>",
+    "epoch": 0
+  }
+}
+```
+
+Field rules for `manifest`:
+
+- `schema` — always the literal `"tasra-encrypt/v2"`.
+- `recordId` — a UUID string; the stable local identifier for this record.
+- `title` — short human label; non-empty, limited length.
+- `version` — positive integer, bumped on update (`>= 1`).
+- `documentSha256` — lowercase 64-hex SHA-256 of the original plaintext bytes.
+- `chainId` — positive integer (43113 on Fuji C-Chain).
+- `keyRegistry` — `0x`-prefixed 40-hex address of the KeyRegistry contract.
+- `slotId` — `0x`-prefixed 64-hex bytes32 identifier of the BLS slot whose group
+  key wrapped the data key. This is the same slotId every decrypt authorization
+  must present against.
+
+Field rules for `envelope`:
+
+- `encryptedAesKey` — standard base64 of `toBytes(GroupEnvelope)`: the group-key
+  KEM output wrapping the compact JWT `{ aesKey, aesNonce }`. Decode with
+  `fromBytes`, then unwrap through the keeper committee (`committeeDecrypt`).
+- `aesCiphertext` — standard base64 of the AES-256-GCM plaintext output (the
+  encrypted text bytes). Decrypt with the unwrapped `aesKey`/`aesNonce`, binding
+  the document's SHA-256 hex string as AAD.
+- `epoch` — integer slot epoch the key was wrapped under; used when the KEM
+  envelope does not carry its own epoch.
+
+This is a hybrid scheme, not raw IBE: everyone who holds the same `DocumentReader`
+credential for `key` can unwrap the group key (whole-group decrypt), so
+`identityScope` is intentionally absent from the manifest. The base64 fields use
+standard alphabet **with** padding, unlike the base64url already inside the
+compact JWT.

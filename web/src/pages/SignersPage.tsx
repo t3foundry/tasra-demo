@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ed25519DidKey } from 'tasra-sdk/oid4vp'
+import { ed25519DidKey } from '@t3foundry/tasra-sdk/oid4vp'
 import { ed25519 } from '@noble/curves/ed25519'
 import { api } from '../api'
 import { name, shortSlot } from '../components'

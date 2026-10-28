@@ -1,7 +1,7 @@
 /** Explicit purchases and usage deposits for a saved tutorial creator. */
-import { TasraClient } from 'tasra-sdk/app'
-import { createFileStore } from 'tasra-sdk/app/node'
-import { bondingCurveAbi, createTasraWriteClient } from 'tasra-sdk/chain'
+import { TasraClient } from '@t3foundry/tasra-sdk/app'
+import { createFileStore } from '@t3foundry/tasra-sdk/app/node'
+import { bondingCurveAbi, createTasraWriteClient } from '@t3foundry/tasra-sdk/chain'
 import { loadNetwork } from './network'
 
 // Amounts are positive integer base units: EURC has 6 decimals; TSRA has 18.

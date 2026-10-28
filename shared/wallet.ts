@@ -7,13 +7,13 @@ import {
   buildResponse,
   submitResponse,
   signCompactJws,
-} from 'tasra-sdk/oid4vp'
-import { hexToBytes } from 'tasra-sdk'
+} from '@t3foundry/tasra-sdk/oid4vp'
+import { hexToBytes } from '@t3foundry/tasra-sdk'
 import {
   createIdentity,
   verifyCredential,
   type TasraIdentity,
-} from 'tasra-sdk/app'
+} from '@t3foundry/tasra-sdk/app'
 import { digest, statement, toHex, type Manifest, type Hex } from './model'
 
 export type DemoWallet = {

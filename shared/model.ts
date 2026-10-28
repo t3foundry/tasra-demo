@@ -1,4 +1,4 @@
-import { verifyFrostSignature, hexToBytes } from 'tasra-sdk'
+import { verifyFrostSignature, hexToBytes } from '@t3foundry/tasra-sdk'
 
 export type Hex = `0x${string}`
 export const toHex = (bytes: Uint8Array): Hex =>

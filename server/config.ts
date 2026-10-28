@@ -1,4 +1,4 @@
-import { TasraClient } from 'tasra-sdk/app'
+import { TasraClient } from '@t3foundry/tasra-sdk/app'
 import { loadNetwork } from './network'
 
 // Use the downloaded manifest after verifying its saved SHA-256 pin.

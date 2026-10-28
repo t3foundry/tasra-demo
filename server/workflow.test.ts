@@ -1,4 +1,4 @@
-import { createIdentity, issueCredential } from 'tasra-sdk/app'
+import { createIdentity, issueCredential } from '@t3foundry/tasra-sdk/app'
 import { importWallet } from '../shared/wallet'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'

@@ -2,8 +2,8 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parsePinnedNetworkManifest } from 'tasra-sdk/chain'
-import { resolveApplicationManifest } from 'tasra-sdk/app'
+import { parsePinnedNetworkManifest } from '@t3foundry/tasra-sdk/chain'
+import { resolveApplicationManifest } from '@t3foundry/tasra-sdk/app'
 
 const base = 'https://raw.githubusercontent.com/t3-foundry/tasra-releases/main/networks/testnet/'
 const here = import.meta.dirname

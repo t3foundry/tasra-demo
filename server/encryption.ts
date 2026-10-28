@@ -1,15 +1,15 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { hexToBytes, fromBytes, type Ciphertext } from 'tasra-sdk'
-import { resolveSlotGroupKey, resolveSlotKeeperUrls, nodeApi } from 'tasra-sdk/chain'
-import { committeeDecrypt } from 'tasra-sdk/committee'
+import { hexToBytes, fromBytes, type Ciphertext } from '@t3foundry/tasra-sdk'
+import { resolveSlotGroupKey, resolveSlotKeeperUrls, nodeApi } from '@t3foundry/tasra-sdk/chain'
+import { committeeDecrypt } from '@t3foundry/tasra-sdk/committee'
 import {
   openVerifierAgentSession,
   awaitVerifierAgentResult,
   decryptPayloadDigest,
   VerifierAgentSessionError,
-} from 'tasra-sdk/oid4vp'
-import { createFileStore } from 'tasra-sdk/app/node'
+} from '@t3foundry/tasra-sdk/oid4vp'
+import { createFileStore } from '@t3foundry/tasra-sdk/app/node'
 import { deployment, tasra, chain, verifierAgentUrl } from './config'
 import { stateDirectory } from './store'
 import { loadService } from './backend'

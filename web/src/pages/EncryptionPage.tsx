@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, base64 } from '../api'
 import { digest } from '../../../shared/model'
-import { encryptEnvelope, toBytes, hexToBytes } from 'tasra-sdk'
+import { encryptEnvelope, toBytes, hexToBytes } from '@t3foundry/tasra-sdk'
 import {
   ENCRYPTION_MAX_PDF_BYTES,
   encodeCompactJwt,

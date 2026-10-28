@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { OpenedVerifierAgentSession } from 'tasra-sdk/oid4vp'
+import type { OpenedVerifierAgentSession } from '@t3foundry/tasra-sdk/oid4vp'
 import type { Hex, SignerRef, SignerState, Proof } from '../shared/model'
 import {
   digest,

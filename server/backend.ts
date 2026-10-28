@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { verifyFrostSignature, hexToBytes } from 'tasra-sdk'
+import { verifyFrostSignature, hexToBytes } from '@t3foundry/tasra-sdk'
 import {
   openVerifierAgentSession,
   awaitVerifierAgentResult,
   VerifierAgentSessionError,
   type OpenedVerifierAgentSession,
   type Jwk,
-} from 'tasra-sdk/oid4vp'
+} from '@t3foundry/tasra-sdk/oid4vp'
 import { chain, deployment, tasra, verifierAgentUrl, assertSameNetwork, type NetworkIdentity } from './config'
 import { stateDirectory } from './store'
 import { statement, toHex, type Hex, type Person, type Proof, type Manifest } from '../shared/model'

@@ -1,14 +1,14 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hexToBytes } from 'tasra-sdk'
+import { hexToBytes } from '@t3foundry/tasra-sdk'
 import {
   issueSdJwtVc,
   verifyCompactJws,
   jwkFromDid,
   holderCnf,
   decodeJson,
-} from 'tasra-sdk/oid4vp'
+} from '@t3foundry/tasra-sdk/oid4vp'
 import { tasra } from './config'
 import { readIssuerSeed } from './signers'
 import { stateDirectory, atomicSave } from './store'

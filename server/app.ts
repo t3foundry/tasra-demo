@@ -3,8 +3,8 @@ import { timingSafeEqual, randomUUID } from 'node:crypto'
 import { readFileSync, existsSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import QRCode from 'qrcode'
-import { pollOid4vpSession } from 'tasra-sdk/verifier-agent'
-import { verifyCompactJws, parseSdJwt, sdJwtClaims, type Jwk } from 'tasra-sdk/oid4vp'
+import { pollOid4vpSession } from '@t3foundry/tasra-sdk/verifier-agent'
+import { verifyCompactJws, parseSdJwt, sdJwtClaims, type Jwk } from '@t3foundry/tasra-sdk/oid4vp'
 import { loadService, liveBackend, readKey } from './backend'
 import { deployment, verifierAgentUrl } from './config'
 import { createZip, readZip } from './zip'
@@ -28,7 +28,7 @@ import {
   type EncryptionManifest,
   type EncryptionEnvelope,
 } from '../shared/encrypt'
-import type { Ciphertext } from 'tasra-sdk'
+import type { Ciphertext } from '@t3foundry/tasra-sdk'
 import {
   createEncryptionSlot,
   groupKeyParams,
